@@ -48,12 +48,37 @@ class Zone(Base, TimestampMixin):
         Integer, ForeignKey("regions.id", ondelete="RESTRICT"), nullable=False
     )
     zone_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    zone_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
     region: Mapped["Region"] = relationship(back_populates="zones")
+    wards: Mapped[list["Ward"]] = relationship(
+        back_populates="zone", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("region_id", "zone_name", name="uq_zones_region_zone_name"),
         Index("ix_zones_region_id", "region_id"),
+    )
+
+
+class Ward(Base, TimestampMixin):
+    __tablename__ = "wards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    zone_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False
+    )
+    ward_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    ward_number: Mapped[str] = mapped_column(String(64), nullable=False)
+    ward_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    zone: Mapped["Zone"] = relationship(back_populates="wards")
+
+    __table_args__ = (
+        UniqueConstraint("zone_id", "ward_number", name="uq_wards_zone_ward_number"),
+        UniqueConstraint("zone_id", "ward_code", name="uq_wards_zone_ward_code"),
+        Index("ix_wards_zone_id", "zone_id"),
     )
 

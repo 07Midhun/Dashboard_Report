@@ -13,7 +13,7 @@ from app.services.merged_report_service import (
     download_merged_report,
     generate_merged_report,
     get_merged_report_detail,
-    inspect_zone_sources,
+    inspect_ward_sources,
     list_merged_reports,
     preview_merged_report,
     publish_merged_report,
@@ -28,6 +28,7 @@ def inspect_sources(
     customer_id: int = Query(...),
     region_id: int = Query(...),
     zone_id: int = Query(...),
+    ward_id: int = Query(...),
     pole_sheet: str | None = Query(default=None),
     pole_header_row: int | None = Query(default=None),
     lamp_sheet: str | None = Query(default=None),
@@ -35,11 +36,12 @@ def inspect_sources(
     _: AuthContext = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> MergedReportInspectOut:
-    return inspect_zone_sources(
+    return inspect_ward_sources(
         db,
         customer_id=customer_id,
         region_id=region_id,
         zone_id=zone_id,
+        ward_id=ward_id,
         pole_sheet=pole_sheet,
         pole_header_row=pole_header_row,
         lamp_sheet=lamp_sheet,
@@ -67,11 +69,17 @@ def get_merged_reports(
     customer_id: int | None = Query(default=None),
     region_id: int | None = Query(default=None),
     zone_id: int | None = Query(default=None),
+    ward_id: int | None = Query(default=None),
     auth: AuthContext = Depends(get_current_auth),
     db: Session = Depends(get_db),
 ) -> list[MergedReportOut]:
     return list_merged_reports(
-        db, auth=auth, customer_id=customer_id, region_id=region_id, zone_id=zone_id
+        db,
+        auth=auth,
+        customer_id=customer_id,
+        region_id=region_id,
+        zone_id=zone_id,
+        ward_id=ward_id,
     )
 
 

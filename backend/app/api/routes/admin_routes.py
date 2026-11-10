@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import AuthContext, get_client_ip, require_admin
 from app.database.session import get_db
-from app.models.hierarchy import Customer, Region, Zone
+from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.report import ReportFileVersion, ReportFile
 from app.models.user import User
 from app.schemas.admin import (
@@ -113,6 +113,8 @@ def get_audit_logs(
 @router.get("/upload-history")
 def get_upload_history(
     report_type: str | None = Query(default=None),
+    ward_id: int | None = Query(default=None),
+    zone_id: int | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     _: AuthContext = Depends(require_admin),
     db: Session = Depends(get_db),
@@ -125,6 +127,10 @@ def get_upload_history(
     )
     if report_type in {"pole_survey", "lamp_installation"}:
         stmt = stmt.where(ReportFile.report_type == report_type)
+    if zone_id is not None:
+        stmt = stmt.where(ReportFile.zone_id == zone_id)
+    if ward_id is not None:
+        stmt = stmt.where(ReportFile.ward_id == ward_id)
 
     rows = db.execute(stmt).all()
     out: list[dict] = []
@@ -132,6 +138,7 @@ def get_upload_history(
         c = db.get(Customer, rf.customer_id)
         r = db.get(Region, rf.region_id)
         z = db.get(Zone, rf.zone_id)
+        w = db.get(Ward, rf.ward_id)
         u = db.get(User, ver.uploaded_by)
         out.append(
             {
@@ -144,6 +151,11 @@ def get_upload_history(
                 "region_name": r.region_name if r else "",
                 "zone_id": rf.zone_id,
                 "zone_name": z.zone_name if z else "",
+                "zone_code": z.zone_code if z else None,
+                "ward_id": rf.ward_id,
+                "ward_number": w.ward_number if w else "",
+                "ward_name": w.ward_name if w else "",
+                "ward_code": w.ward_code if w else "",
                 "version": ver.version,
                 "is_current": ver.version == rf.version and rf.status == "active",
                 "file_status": rf.status,

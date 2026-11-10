@@ -33,6 +33,7 @@ export interface Customer {
   status: EntityStatus;
   regions_count: number;
   zones_count: number;
+  wards_count: number;
   report_files_count: number;
   created_at: string;
   updated_at: string;
@@ -45,6 +46,7 @@ export interface Region {
   region_name: string;
   status: EntityStatus;
   zones_count: number;
+  wards_count: number;
   report_files_count: number;
   created_at: string;
   updated_at: string;
@@ -57,23 +59,59 @@ export interface Zone {
   customer_id: number;
   customer_name: string;
   zone_name: string;
+  zone_code: string | null;
+  status: EntityStatus;
+  wards_count: number;
+  report_files_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ward {
+  id: number;
+  zone_id: number;
+  zone_name: string;
+  zone_code: string | null;
+  region_id: number;
+  region_name: string;
+  customer_id: number;
+  customer_name: string;
+  ward_name: string;
+  ward_number: string;
+  ward_code: string;
   status: EntityStatus;
   has_pole_survey: boolean;
   has_lamp_installation: boolean;
   merged_status: string | null;
+  has_published_merged: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface HierarchyWardNode {
+  id: number;
+  zone_id: number;
+  ward_name: string;
+  ward_number: string;
+  ward_code: string;
+  status: EntityStatus;
+  has_pole_survey: boolean;
+  has_lamp_installation: boolean;
+  merged_status: string | null;
+  has_published_merged: boolean;
 }
 
 export interface HierarchyZoneNode {
   id: number;
   region_id: number;
   zone_name: string;
+  zone_code: string | null;
   status: EntityStatus;
-  has_pole_survey: boolean;
-  has_lamp_installation: boolean;
-  merged_status: string | null;
-  has_published_merged: boolean;
+  wards_count: number;
+  wards_with_pole_survey: number;
+  wards_with_lamp_installation: number;
+  wards_with_merged: number;
+  wards: HierarchyWardNode[];
 }
 
 export interface HierarchyRegionNode {
@@ -82,6 +120,7 @@ export interface HierarchyRegionNode {
   region_name: string;
   status: EntityStatus;
   zones_count: number;
+  wards_count: number;
   zones: HierarchyZoneNode[];
 }
 
@@ -91,6 +130,7 @@ export interface HierarchyCustomerNode {
   status: EntityStatus;
   regions_count: number;
   zones_count: number;
+  wards_count: number;
   regions: HierarchyRegionNode[];
 }
 
@@ -116,6 +156,11 @@ export interface ReportFile {
   region_name: string;
   zone_id: number;
   zone_name: string;
+  zone_code: string | null;
+  ward_id: number;
+  ward_name: string;
+  ward_number: string;
+  ward_code: string;
   report_type: ReportType;
   original_filename: string;
   file_size: number;
@@ -163,6 +208,7 @@ export interface MergedReportInspect {
   customer_id: number;
   region_id: number;
   zone_id: number;
+  ward_id: number;
   pole_survey_ready: boolean;
   lamp_installation_ready: boolean;
   pole_survey_file: ReportFile | null;
@@ -224,6 +270,11 @@ export interface MergedReport {
   region_name: string;
   zone_id: number;
   zone_name: string;
+  zone_code: string | null;
+  ward_id: number;
+  ward_name: string;
+  ward_number: string;
+  ward_code: string;
   current_version: number;
   status: string;
   is_outdated: boolean;
@@ -258,16 +309,43 @@ export interface RegionAvailabilityItem {
   region_id: number;
   region_name: string;
   total_zones: number;
+  total_wards: number;
   pole_survey_count: number;
   lamp_installation_count: number;
   merged_published_count: number;
   merged_draft_or_outdated_count: number;
+  awaiting_uploads_count: number;
+  error_wards_count: number;
+}
+
+export interface ZoneAvailabilityItem {
+  customer_id: number;
+  customer_name: string;
+  region_id: number;
+  region_name: string;
+  zone_id: number;
+  zone_name: string;
+  zone_code: string | null;
+  total_wards: number;
+  pole_survey_count: number;
+  lamp_installation_count: number;
+  merged_published_count: number;
+  merged_draft_or_outdated_count: number;
+  awaiting_uploads_count: number;
+  error_wards_count: number;
 }
 
 export interface AdminDashboardData {
   total_customers: number;
   total_regions: number;
   total_zones: number;
+  total_wards: number;
+  wards_with_pole_survey: number;
+  wards_with_lamp_installation: number;
+  wards_with_completed_merged: number;
+  wards_with_published_merged: number;
+  wards_awaiting_uploads: number;
+  wards_with_processing_errors: number;
   total_pole_survey_reports: number;
   total_lamp_installation_reports: number;
   total_merged_reports: number;
@@ -279,6 +357,9 @@ export interface AdminDashboardData {
     customer_name: string;
     region_name: string;
     zone_name: string;
+    ward_id: number;
+    ward_number: string;
+    ward_name: string;
     uploaded_by_name: string | null;
     uploaded_at: string;
   }[];
@@ -287,6 +368,9 @@ export interface AdminDashboardData {
     customer_name: string;
     region_name: string;
     zone_name: string;
+    ward_id: number;
+    ward_number: string;
+    ward_name: string;
     current_version: number;
     status: string;
     added_records: number;
@@ -298,6 +382,9 @@ export interface AdminDashboardData {
     customer_name: string;
     region_name: string;
     zone_name: string;
+    ward_id: number;
+    ward_number: string;
+    ward_name: string;
     processing_status: string;
     added_records: number;
     duplicate_records: number;
@@ -311,17 +398,26 @@ export interface AdminDashboardData {
     customer_name: string;
     region_name: string;
     zone_name: string;
+    ward_id: number;
+    ward_number: string;
+    ward_name: string;
     processing_status: string;
     error_message: string | null;
     created_at: string;
   }[];
   report_availability_by_region: RegionAvailabilityItem[];
+  zone_availability: ZoneAvailabilityItem[];
 }
 
 export interface CustomerDashboardData {
   customer_names: string[];
   total_regions: number;
   total_zones: number;
+  total_wards: number;
+  wards_with_pole_survey: number;
+  wards_with_lamp_installation: number;
+  wards_with_completed_merged: number;
+  wards_awaiting_uploads: number;
   available_pole_survey_count: number;
   available_lamp_installation_count: number;
   available_merged_count: number;
@@ -332,10 +428,14 @@ export interface CustomerDashboardData {
     title: string;
     region_name: string;
     zone_name: string;
+    ward_id: number;
+    ward_number: string;
+    ward_name: string;
     updated_at: string;
     version: number;
   }[];
   region_availability: RegionAvailabilityItem[];
+  zone_availability: ZoneAvailabilityItem[];
 }
 
 export interface ExternalLink {
@@ -379,6 +479,11 @@ export interface UploadHistoryItem {
   region_name: string;
   zone_id: number;
   zone_name: string;
+  zone_code: string | null;
+  ward_id: number;
+  ward_number: string;
+  ward_name: string;
+  ward_code: string;
   version: number;
   is_current: boolean;
   file_status: string;
@@ -388,4 +493,3 @@ export interface UploadHistoryItem {
   uploaded_by_name: string | null;
   uploaded_at: string;
 }
-

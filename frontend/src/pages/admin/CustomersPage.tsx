@@ -141,6 +141,7 @@ export function CustomersPage() {
                   <th className="px-4 py-3 font-semibold">Customer Name</th>
                   <th className="px-4 py-3 font-semibold text-center">Regions</th>
                   <th className="px-4 py-3 font-semibold text-center">Zones</th>
+                  <th className="px-4 py-3 font-semibold text-center">Wards</th>
                   <th className="px-4 py-3 font-semibold text-center">Active Files</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
@@ -180,6 +181,7 @@ export function CustomersPage() {
                     </td>
                     <td className="px-4 py-3 text-center font-semibold">{c.regions_count}</td>
                     <td className="px-4 py-3 text-center font-semibold">{c.zones_count}</td>
+                    <td className="px-4 py-3 text-center font-semibold text-[#0D7780]">{c.wards_count}</td>
                     <td className="px-4 py-3 text-center font-semibold text-[#075D6B]">
                       {c.report_files_count}
                     </td>

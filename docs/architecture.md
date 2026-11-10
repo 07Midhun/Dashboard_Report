@@ -25,11 +25,11 @@ FastAPI Backend API (Render Web Service)
   - `data_only=True` is used when inspecting values/headers so formula-computed cells evaluate to their actual displayed values.
   - `data_only=False` is used when cloning the Lamp Installation master workbook so existing Excel formulas, cell formatting, column widths, freeze panes, auto-filters, merged cells, and print setup remain intact.
 - **Temp Workspace Isolation:** Workbook reads/writes during reconciliation happen inside isolated per-job directories under `TEMP_PROCESSING_DIR` and are cleaned up in `finally` blocks. Source workbooks are never modified in place.
-- **Stale Report Detection:** Uploading, replacing, or deleting a zone's source file transitions any existing `MergedReport` in that zone to `outdated`, while retaining previously published versions in `merged_report_versions`.
+- **Ward-Isolated Processing & Stale Report Detection:** Uploading, replacing, or deleting a ward's source file transitions only that ward's existing `MergedReport` to `outdated`, while retaining previously published versions in `merged_report_versions`. Reconciliation never compares poles across different wards.
 
 ## 3. Frontend Design Principles
 
 - **Strict Role Separation:** `AuthContext` & `AdminRoute` prevent non-admins from rendering administrative views; all security enforcement is duplicated authoritatively on the backend.
-- **Persistent Hierarchy Context:** `HierarchyContext` keeps Customer, Region, and Zone selections synchronized across dashboards, source reports, and the Merged Report workspace.
+- **Persistent 4-Level Hierarchy Context:** `HierarchyContext` keeps Customer, Region, Zone, and Ward selections synchronized across dashboards, source reports, and the Merged Report workspace.
 - **Corporate Design System:** Built around Schnell's teal palette (`#075D6B`, `#0D7780`, `#18A6A0`, `#F4F7F9`, `#FFFFFF`, `#173042`, `#718096`).
 

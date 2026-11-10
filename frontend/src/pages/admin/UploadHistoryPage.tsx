@@ -11,12 +11,15 @@ export function UploadHistoryPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<UploadHistoryItem[]>([]);
   const [filterType, setFilterType] = useState<"" | ReportType>("");
+  const [wardSearch, setWardSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminApi.listUploadHistory(filterType || undefined);
+      const data = await adminApi.listUploadHistory({
+        report_type: filterType || undefined,
+      });
       setItems(data);
     } catch (err) {
       showToast("error", "Load Failed", extractErrorMessage(err));
@@ -29,43 +32,69 @@ export function UploadHistoryPage() {
     loadHistory();
   }, [loadHistory]);
 
+  const displayedItems = wardSearch.trim()
+    ? items.filter((it) => {
+        const q = wardSearch.trim().toLowerCase();
+        return (
+          it.ward_number.toLowerCase().includes(q) ||
+          it.ward_name.toLowerCase().includes(q) ||
+          it.zone_name.toLowerCase().includes(q) ||
+          it.region_name.toLowerCase().includes(q) ||
+          it.original_filename.toLowerCase().includes(q)
+        );
+      })
+    : items;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#173042]">Upload History &amp; File Versions</h1>
           <p className="mt-1 text-sm text-[#718096]">
-            Complete immutable archive of every Pole Survey and Lamp Installation upload version.
+            Complete immutable ward-wise archive of every Pole Survey and Lamp Installation upload version.
           </p>
         </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value as "" | ReportType)}
-          className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-[#173042]"
-        >
-          <option value="">All Report Types</option>
-          <option value="pole_survey">Pole Survey Reports</option>
-          <option value="lamp_installation">Lamp Installation Reports</option>
-        </select>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            type="text"
+            value={wardSearch}
+            onChange={(e) => setWardSearch(e.target.value)}
+            placeholder="Filter ward, zone, or file..."
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-[#173042]"
+          />
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as "" | ReportType)}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-[#173042]"
+          >
+            <option value="">All Report Types</option>
+            <option value="pole_survey">Pole Survey Reports</option>
+            <option value="lamp_installation">Lamp Installation Reports</option>
+          </select>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200/80 bg-white shadow-card overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-4 flex items-center gap-2">
           <History className="h-4 w-4 text-[#075D6B]" />
-          <h2 className="text-sm font-bold text-[#173042]">Version Records ({items.length})</h2>
+          <h2 className="text-sm font-bold text-[#173042]">
+            Version Records ({displayedItems.length})
+          </h2>
         </div>
 
         {loading ? (
           <p className="p-6 text-center text-xs text-[#718096]">Loading upload history...</p>
-        ) : items.length === 0 ? (
-          <p className="p-8 text-center text-xs text-[#718096]">No uploads recorded yet.</p>
+        ) : displayedItems.length === 0 ? (
+          <p className="p-8 text-center text-xs text-[#718096]">
+            No uploads recorded matching the filter.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-xs">
               <thead className="bg-slate-50 text-[#718096]">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Module</th>
-                  <th className="px-4 py-3 font-semibold">Customer / Region / Zone</th>
+                  <th className="px-4 py-3 font-semibold">Ward / Zone / Region</th>
                   <th className="px-4 py-3 font-semibold">Filename</th>
                   <th className="px-4 py-3 font-semibold">Version</th>
                   <th className="px-4 py-3 font-semibold">Rows / Size</th>
@@ -74,15 +103,21 @@ export function UploadHistoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
+                {displayedItems.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-semibold text-[#075D6B]">
                       {formatReportType(item.report_type)}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-semibold text-[#173042]">{item.zone_name}</p>
+                      <p className="font-semibold text-[#173042]">
+                        <span className="mr-1.5 rounded bg-[#075D6B]/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#075D6B]">
+                          {item.ward_number}
+                        </span>
+                        {item.ward_name}
+                      </p>
                       <p className="text-[11px] text-[#718096]">
-                        {item.customer_name} • {item.region_name}
+                        {item.customer_name} • {item.region_name} • {item.zone_name}
+                        {item.zone_code ? ` (${item.zone_code})` : ""}
                       </p>
                     </td>
                     <td className="px-4 py-3 font-medium text-[#173042]">
@@ -101,7 +136,13 @@ export function UploadHistoryPage() {
                               ? "deleted"
                               : "superseded"
                           }
-                          label={item.is_current ? "Current" : item.file_status === "deleted" ? "Deleted" : "Archived"}
+                          label={
+                            item.is_current
+                              ? "Current"
+                              : item.file_status === "deleted"
+                              ? "Deleted"
+                              : "Archived"
+                          }
                         />
                       </div>
                     </td>
@@ -139,4 +180,3 @@ export function UploadHistoryPage() {
     </div>
   );
 }
-

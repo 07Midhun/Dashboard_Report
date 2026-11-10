@@ -18,6 +18,7 @@ import type {
   TokenResponse,
   UploadHistoryItem,
   User,
+  Ward,
   Zone,
 } from "../types";
 
@@ -94,6 +95,7 @@ export const hierarchyApi = {
   createZone: async (payload: {
     region_id: number;
     zone_name: string;
+    zone_code?: string | null;
     status: string;
   }): Promise<Zone> => {
     const { data } = await api.post<Zone>("/zones", payload);
@@ -101,13 +103,46 @@ export const hierarchyApi = {
   },
   updateZone: async (
     id: number,
-    payload: { zone_name?: string; status?: string }
+    payload: { zone_name?: string; zone_code?: string | null; status?: string }
   ): Promise<Zone> => {
     const { data } = await api.put<Zone>(`/zones/${id}`, payload);
     return data;
   },
   deleteZone: async (id: number): Promise<void> => {
     await api.delete(`/zones/${id}`);
+  },
+  listWards: async (params?: {
+    zone_id?: number;
+    region_id?: number;
+    customer_id?: number;
+  }): Promise<Ward[]> => {
+    const { data } = await api.get<Ward[]>("/wards", { params });
+    return data;
+  },
+  createWard: async (payload: {
+    zone_id: number;
+    ward_name: string;
+    ward_number: string;
+    ward_code?: string | null;
+    status: string;
+  }): Promise<Ward> => {
+    const { data } = await api.post<Ward>("/wards", payload);
+    return data;
+  },
+  updateWard: async (
+    id: number,
+    payload: {
+      ward_name?: string;
+      ward_number?: string;
+      ward_code?: string;
+      status?: string;
+    }
+  ): Promise<Ward> => {
+    const { data } = await api.put<Ward>(`/wards/${id}`, payload);
+    return data;
+  },
+  deleteWard: async (id: number): Promise<void> => {
+    await api.delete(`/wards/${id}`);
   },
 };
 
@@ -118,7 +153,7 @@ function reportBasePath(reportType: ReportType): string {
 export const reportFilesApi = {
   list: async (
     reportType: ReportType,
-    params?: { customer_id?: number; region_id?: number; zone_id?: number }
+    params?: { customer_id?: number; region_id?: number; zone_id?: number; ward_id?: number }
   ): Promise<ReportFile[]> => {
     const { data } = await api.get<ReportFile[]>(reportBasePath(reportType), { params });
     return data;
@@ -176,6 +211,7 @@ export const mergedReportsApi = {
     customer_id: number;
     region_id: number;
     zone_id: number;
+    ward_id: number;
     pole_sheet?: string;
     pole_header_row?: number;
     lamp_sheet?: string;
@@ -188,6 +224,7 @@ export const mergedReportsApi = {
     customer_id: number;
     region_id: number;
     zone_id: number;
+    ward_id: number;
     pole_survey_mapping: MappingInput;
     lamp_installation_mapping: MappingInput;
     save_mapping: boolean;
@@ -199,6 +236,7 @@ export const mergedReportsApi = {
     customer_id?: number;
     region_id?: number;
     zone_id?: number;
+    ward_id?: number;
   }): Promise<MergedReport[]> => {
     const { data } = await api.get<MergedReport[]>("/merged-reports", { params });
     return data;
@@ -220,12 +258,20 @@ export const mergedReportsApi = {
 };
 
 export const dashboardApi = {
-  getAdmin: async (): Promise<AdminDashboardData> => {
-    const { data } = await api.get<AdminDashboardData>("/dashboard/admin");
+  getAdmin: async (params?: {
+    customer_id?: number;
+    region_id?: number;
+    zone_id?: number;
+  }): Promise<AdminDashboardData> => {
+    const { data } = await api.get<AdminDashboardData>("/dashboard/admin", { params });
     return data;
   },
-  getCustomer: async (): Promise<CustomerDashboardData> => {
-    const { data } = await api.get<CustomerDashboardData>("/dashboard/customer");
+  getCustomer: async (params?: {
+    customer_id?: number;
+    region_id?: number;
+    zone_id?: number;
+  }): Promise<CustomerDashboardData> => {
+    const { data } = await api.get<CustomerDashboardData>("/dashboard/customer", { params });
     return data;
   },
 };
@@ -303,10 +349,12 @@ export const adminApi = {
   deleteLedRule: async (id: number): Promise<void> => {
     await api.delete(`/led-rules/${id}`);
   },
-  listUploadHistory: async (reportType?: ReportType): Promise<UploadHistoryItem[]> => {
-    const { data } = await api.get<UploadHistoryItem[]>("/upload-history", {
-      params: reportType ? { report_type: reportType } : undefined,
-    });
+  listUploadHistory: async (params?: {
+    report_type?: ReportType;
+    zone_id?: number;
+    ward_id?: number;
+  }): Promise<UploadHistoryItem[]> => {
+    const { data } = await api.get<UploadHistoryItem[]>("/upload-history", { params });
     return data;
   },
   listAuditLogs: async (limit = 100): Promise<AuditLogEntry[]> => {
@@ -314,4 +362,3 @@ export const adminApi = {
     return data;
   },
 };
-

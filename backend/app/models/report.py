@@ -19,6 +19,9 @@ class ReportFile(Base):
     zone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False
     )
+    ward_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("wards.id", ondelete="RESTRICT"), nullable=False
+    )
     report_type: Mapped[str] = mapped_column(String(32), nullable=False)  # pole_survey | lamp_installation
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     storage_path: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -50,11 +53,13 @@ class ReportFile(Base):
             "customer_id",
             "region_id",
             "zone_id",
+            "ward_id",
             "report_type",
             unique=True,
             postgresql_where=text("status = 'active'"),
         ),
         Index("ix_report_files_zone_type", "zone_id", "report_type"),
+        Index("ix_report_files_ward_type", "ward_id", "report_type"),
         Index("ix_report_files_customer_id", "customer_id"),
     )
 
@@ -65,6 +70,9 @@ class ReportFileVersion(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     report_file_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("report_files.id", ondelete="CASCADE"), nullable=False
+    )
+    ward_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("wards.id", ondelete="RESTRICT"), nullable=False
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -87,6 +95,7 @@ class ReportFileVersion(Base):
     __table_args__ = (
         UniqueConstraint("report_file_id", "version", name="uq_report_file_version"),
         Index("ix_rfv_report_file_id", "report_file_id"),
+        Index("ix_rfv_ward_id", "ward_id"),
     )
 
 
@@ -102,6 +111,9 @@ class MergedReport(Base):
     )
     zone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False
+    )
+    ward_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("wards.id", ondelete="RESTRICT"), nullable=False
     )
     current_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(
@@ -135,7 +147,8 @@ class MergedReport(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("customer_id", "region_id", "zone_id", name="uq_merged_report_zone_slot"),
+        UniqueConstraint("customer_id", "region_id", "zone_id", "ward_id", name="uq_merged_report_ward_slot"),
+        Index("ix_merged_reports_ward_id", "ward_id"),
         Index("ix_merged_reports_status", "status"),
     )
 
@@ -192,6 +205,9 @@ class ProcessingLog(Base):
     zone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False
     )
+    ward_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("wards.id", ondelete="RESTRICT"), nullable=False
+    )
     total_lamp_installation_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_survey_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_led_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -213,6 +229,7 @@ class ProcessingLog(Base):
 
     __table_args__ = (
         Index("ix_processing_logs_merged_report_created", "merged_report_id", "created_at"),
+        Index("ix_processing_logs_ward_created", "ward_id", "created_at"),
         Index("ix_processing_logs_status_created", "processing_status", "created_at"),
     )
 

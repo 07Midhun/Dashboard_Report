@@ -4,20 +4,26 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models.config_models import ExternalLink, LedClassificationRule
-from app.models.hierarchy import Customer, Region, Zone
+from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.user import User, UserCustomerPermission
+
+
+def _ward_range(start: int, end: int) -> list[str]:
+    return [f"W{n}" for n in range(start, end + 1)]
 
 
 INITIAL_HIERARCHY = {
     "Bangalore (BBMP)": {
-        "BOMMANAHALLI": ["Bommanahalli"],
+        "BOMMANAHALLI": [
+            ("Bommanahalli", "BMH", _ward_range(202, 212)),
+        ],
         "EAST": [
-            "CV Raman Nagar",
-            "Hebbal",
-            "Pulakeshi Nagar",
-            "Sarvagna Nagar",
-            "Shanthi Nagar",
-            "Sivaji Nagar",
+            ("CV Raman Nagar", "CVRN", _ward_range(108, 115)),
+            ("Hebbal", "HEB", _ward_range(61, 68)),
+            ("Pulakeshi Nagar", "PN", _ward_range(69, 75)),
+            ("Sarvagna Nagar", "SN", _ward_range(76, 85)),
+            ("Shanthi Nagar", "SNTR", _ward_range(166, 172)),
+            ("Sivaji Nagar", "SVJR", _ward_range(116, 121)),
         ],
     }
 }
@@ -96,7 +102,7 @@ def seed_initial_data(db: Session) -> None:
             db.add(admin)
         db.flush()
 
-    # 2. Seed initial Customer, Regions, and Zones
+    # 2. Seed initial Customer, Regions, Zones, and Wards
     bbmp_customer: Customer | None = None
     for customer_name, regions_map in INITIAL_HIERARCHY.items():
         customer = db.scalar(select(Customer).where(Customer.customer_name == customer_name))
@@ -107,7 +113,7 @@ def seed_initial_data(db: Session) -> None:
         if customer_name == "Bangalore (BBMP)":
             bbmp_customer = customer
 
-        for region_name, zone_names in regions_map.items():
+        for region_name, zones_list in regions_map.items():
             region = db.scalar(
                 select(Region).where(
                     Region.customer_id == customer.id,
@@ -119,7 +125,7 @@ def seed_initial_data(db: Session) -> None:
                 db.add(region)
                 db.flush()
 
-            for zone_name in zone_names:
+            for zone_name, zone_code, ward_codes in zones_list:
                 zone = db.scalar(
                     select(Zone).where(
                         Zone.region_id == region.id,
@@ -127,7 +133,39 @@ def seed_initial_data(db: Session) -> None:
                     )
                 )
                 if zone is None:
-                    db.add(Zone(region_id=region.id, zone_name=zone_name, status="active"))
+                    zone = Zone(
+                        region_id=region.id,
+                        zone_name=zone_name,
+                        zone_code=zone_code,
+                        status="active",
+                    )
+                    db.add(zone)
+                    db.flush()
+                elif not zone.zone_code:
+                    zone.zone_code = zone_code
+
+                for w_code in ward_codes:
+                    existing_ward = db.scalar(
+                        select(Ward).where(
+                            Ward.zone_id == zone.id,
+                            Ward.ward_number == w_code,
+                        )
+                    )
+                    if existing_ward is None:
+                        ward_name = (
+                            f"Ward {w_code[1:]}"
+                            if w_code.startswith("W") and w_code[1:].isdigit()
+                            else w_code
+                        )
+                        db.add(
+                            Ward(
+                                zone_id=zone.id,
+                                ward_name=ward_name,
+                                ward_number=w_code,
+                                ward_code=w_code,
+                                status="active",
+                            )
+                        )
 
     # 3. Seed sample Customer user linked to Bangalore (BBMP) (or migrate legacy starter seed account)
     cust_email = settings.seed_customer_user_email.strip().lower()

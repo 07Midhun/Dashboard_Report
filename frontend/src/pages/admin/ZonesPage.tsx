@@ -18,10 +18,12 @@ export function ZonesPage() {
   const [selectedCustId, setSelectedCustId] = useState<number | "">("");
   const [selectedRegId, setSelectedRegId] = useState<number | "">("");
   const [newName, setNewName] = useState("");
+  const [newCode, setNewCode] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [editing, setEditing] = useState<Zone | null>(null);
   const [editName, setEditName] = useState("");
+  const [editCode, setEditCode] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Zone | null>(null);
 
   const loadData = useCallback(async () => {
@@ -35,15 +37,15 @@ export function ZonesPage() {
       setCustomers(custList);
       setRegions(regList);
       setZones(zoneList);
-      if (custList.length > 0 && selectedCustId === "") {
-        setSelectedCustId(custList[0].id);
-      }
+      setSelectedCustId((prev) =>
+        prev === "" && custList.length > 0 ? custList[0].id : prev
+      );
     } catch (err) {
       showToast("error", "Load Failed", extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [selectedCustId, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     loadData();
@@ -57,6 +59,8 @@ export function ZonesPage() {
   useEffect(() => {
     if (availableRegions.length > 0 && !availableRegions.some((r) => r.id === selectedRegId)) {
       setSelectedRegId(availableRegions[0].id);
+    } else if (availableRegions.length === 0) {
+      setSelectedRegId("");
     }
   }, [availableRegions, selectedRegId]);
 
@@ -67,9 +71,11 @@ export function ZonesPage() {
       await hierarchyApi.createZone({
         region_id: Number(selectedRegId),
         zone_name: newName.trim(),
+        zone_code: newCode.trim() || null,
         status: "active",
       });
       setNewName("");
+      setNewCode("");
       showToast("success", "Zone Created");
       await Promise.all([loadData(), refreshTree()]);
     } catch (err) {
@@ -80,7 +86,10 @@ export function ZonesPage() {
   const handleSaveEdit = async () => {
     if (!editing || !editName.trim()) return;
     try {
-      await hierarchyApi.updateZone(editing.id, { zone_name: editName.trim() });
+      await hierarchyApi.updateZone(editing.id, {
+        zone_name: editName.trim(),
+        zone_code: editCode.trim() || null,
+      });
       setEditing(null);
       showToast("success", "Zone Updated");
       await Promise.all([loadData(), refreshTree()]);
@@ -123,7 +132,7 @@ export function ZonesPage() {
       <div>
         <h1 className="text-2xl font-bold text-[#173042]">Zone Management</h1>
         <p className="mt-1 text-sm text-[#718096]">
-          Manage wards and zones under each region. Report processing is strictly isolated per zone.
+          Manage administrative zones under each region. Configure individual wards inside Ward Management.
         </p>
       </div>
 
@@ -131,7 +140,7 @@ export function ZonesPage() {
         onSubmit={handleCreate}
         className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-card flex flex-wrap items-end gap-3"
       >
-        <div className="w-full sm:w-52">
+        <div className="w-full sm:w-48">
           <label className="mb-1.5 block text-xs font-semibold text-[#173042]">Customer</label>
           <select
             value={selectedCustId}
@@ -146,7 +155,7 @@ export function ZonesPage() {
           </select>
         </div>
 
-        <div className="w-full sm:w-52">
+        <div className="w-full sm:w-48">
           <label className="mb-1.5 block text-xs font-semibold text-[#173042]">Region</label>
           <select
             value={selectedRegId}
@@ -161,9 +170,9 @@ export function ZonesPage() {
           </select>
         </div>
 
-        <div className="flex-1 min-w-[200px]">
+        <div className="flex-1 min-w-[180px]">
           <label className="mb-1.5 block text-xs font-semibold text-[#173042]">
-            New Zone / Ward Name
+            New Zone Name
           </label>
           <input
             type="text"
@@ -171,6 +180,19 @@ export function ZonesPage() {
             onChange={(e) => setNewName(e.target.value)}
             placeholder="e.g. Indiranagar"
             className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-[#173042]"
+          />
+        </div>
+
+        <div className="w-full sm:w-36">
+          <label className="mb-1.5 block text-xs font-semibold text-[#173042]">
+            Zone Code
+          </label>
+          <input
+            type="text"
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
+            placeholder="e.g. IND"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-[#173042] uppercase"
           />
         </div>
 
@@ -198,8 +220,10 @@ export function ZonesPage() {
               <thead className="bg-slate-50 text-[#718096]">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Zone Name</th>
-                  <th className="px-4 py-3 font-semibold">Region</th>
-                  <th className="px-4 py-3 font-semibold">Report Readiness</th>
+                  <th className="px-4 py-3 font-semibold">Code</th>
+                  <th className="px-4 py-3 font-semibold">Region / Customer</th>
+                  <th className="px-4 py-3 font-semibold text-center">Wards</th>
+                  <th className="px-4 py-3 font-semibold text-center">Active Files</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold text-right">Actions</th>
                 </tr>
@@ -209,12 +233,19 @@ export function ZonesPage() {
                   <tr key={z.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-semibold text-[#173042]">
                       {editing?.id === z.id ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <input
                             type="text"
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
                             className="rounded-lg border border-teal-300 px-2.5 py-1 text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={editCode}
+                            onChange={(e) => setEditCode(e.target.value)}
+                            placeholder="Code"
+                            className="w-20 rounded-lg border border-teal-300 px-2 py-1 text-xs font-mono uppercase"
                           />
                           <button
                             type="button"
@@ -235,31 +266,23 @@ export function ZonesPage() {
                         z.zone_name
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {z.zone_code ? (
+                        <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-bold text-[#075D6B]">
+                          {z.zone_code}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-[#718096]">
                       {z.region_name} ({z.customer_name})
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <span
-                          className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
-                            z.has_pole_survey
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          Pole Survey
-                        </span>
-                        <span
-                          className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
-                            z.has_lamp_installation
-                              ? "bg-sky-50 text-sky-700 border border-sky-200"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          Lamp Install
-                        </span>
-                        {z.merged_status && <StatusBadge status={z.merged_status} />}
-                      </div>
+                    <td className="px-4 py-3 text-center font-bold text-[#075D6B]">
+                      {z.wards_count}
+                    </td>
+                    <td className="px-4 py-3 text-center font-semibold">
+                      {z.report_files_count}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={z.status} />
@@ -271,6 +294,7 @@ export function ZonesPage() {
                           onClick={() => {
                             setEditing(z);
                             setEditName(z.zone_name);
+                            setEditCode(z.zone_code ?? "");
                           }}
                           className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-100"
                         >
@@ -303,7 +327,7 @@ export function ZonesPage() {
       <ConfirmModal
         open={deleteTarget !== null}
         title="Delete Zone?"
-        message={`Attempt to delete "${deleteTarget?.zone_name}"? Zones with uploaded or merged reports cannot be deleted and must be deactivated instead.`}
+        message={`Attempt to delete "${deleteTarget?.zone_name}"? Zones containing wards or uploaded reports cannot be deleted and must be deactivated instead.`}
         confirmLabel="Delete"
         danger
         onConfirm={handleDelete}
@@ -312,4 +336,3 @@ export function ZonesPage() {
     </div>
   );
 }
-

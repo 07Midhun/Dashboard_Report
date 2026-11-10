@@ -6,13 +6,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import AuthContext, verify_customer_access
-from app.models.hierarchy import Customer, Region, Zone
+from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.report import MergedReport, ReportFile, ReportFileVersion
 from app.models.user import User
 from app.schemas.reports import ExcelPreviewOut, ReportFileOut, ReportFileVersionOut
 from app.services.audit_service import record_audit_log
 from app.services.excel_reader_service import inspect_workbook, preview_workbook
-from app.services.hierarchy_service import validate_zone_hierarchy
+from app.services.hierarchy_service import validate_ward_hierarchy
 from app.services.storage_service import storage_service
 from app.utilities.file_validators import validate_excel_upload
 
@@ -24,6 +24,7 @@ def _serialize_report_file(db: Session, rf: ReportFile) -> ReportFileOut:
     cust = db.get(Customer, rf.customer_id)
     reg = db.get(Region, rf.region_id)
     zone = db.get(Zone, rf.zone_id)
+    ward = db.get(Ward, rf.ward_id)
     uploader = db.get(User, rf.uploaded_by)
 
     versions_out: list[ReportFileVersionOut] = []
@@ -53,6 +54,11 @@ def _serialize_report_file(db: Session, rf: ReportFile) -> ReportFileOut:
         region_name=reg.region_name if reg else "",
         zone_id=rf.zone_id,
         zone_name=zone.zone_name if zone else "",
+        zone_code=zone.zone_code if zone else None,
+        ward_id=rf.ward_id,
+        ward_name=ward.ward_name if ward else "",
+        ward_number=ward.ward_number if ward else "",
+        ward_code=ward.ward_code if ward else "",
         report_type=rf.report_type,
         original_filename=rf.original_filename,
         file_size=rf.file_size,
@@ -76,6 +82,7 @@ def upload_report_file(
     customer_id: int,
     region_id: int,
     zone_id: int,
+    ward_id: int,
     report_type: ReportTypeLiteral,
     filename: str,
     content: bytes,
@@ -83,7 +90,13 @@ def upload_report_file(
     user_id: int,
     ip_address: str | None,
 ) -> ReportFileOut:
-    validate_zone_hierarchy(db, customer_id=customer_id, region_id=region_id, zone_id=zone_id)
+    validate_ward_hierarchy(
+        db,
+        customer_id=customer_id,
+        region_id=region_id,
+        zone_id=zone_id,
+        ward_id=ward_id,
+    )
     safe_name, ext, sha256_hex = validate_excel_upload(filename, content)
 
     existing = db.scalar(
@@ -93,6 +106,7 @@ def upload_report_file(
             ReportFile.customer_id == customer_id,
             ReportFile.region_id == region_id,
             ReportFile.zone_id == zone_id,
+            ReportFile.ward_id == ward_id,
             ReportFile.report_type == report_type,
             ReportFile.status == "active",
         )
@@ -101,7 +115,7 @@ def upload_report_file(
     if existing is not None and not replace_existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"An active {report_type.replace('_', ' ')} file already exists for this zone. Confirm replacement to upload a new version.",
+            detail=f"An active {report_type.replace('_', ' ')} file already exists for this ward. Confirm replacement to upload a new version.",
         )
 
     # Validate workbook structure inside an isolated temp workspace before persisting
@@ -115,6 +129,7 @@ def upload_report_file(
         customer_id=customer_id,
         region_id=region_id,
         zone_id=zone_id,
+        ward_id=ward_id,
         category=report_type,
         version=next_version,
         extension=ext,
@@ -126,6 +141,7 @@ def upload_report_file(
             customer_id=customer_id,
             region_id=region_id,
             zone_id=zone_id,
+            ward_id=ward_id,
             report_type=report_type,
             original_filename=safe_name,
             storage_path=rel_storage_path,
@@ -156,6 +172,7 @@ def upload_report_file(
 
     version_row = ReportFileVersion(
         report_file_id=rf.id,
+        ward_id=ward_id,
         version=next_version,
         original_filename=safe_name,
         storage_path=rel_storage_path,
@@ -169,12 +186,13 @@ def upload_report_file(
     )
     db.add(version_row)
 
-    # Mark any existing merged report for this zone as outdated when source changes
+    # Mark any existing merged report for this specific ward as outdated when source changes
     merged = db.scalar(
         select(MergedReport).where(
             MergedReport.customer_id == customer_id,
             MergedReport.region_id == region_id,
             MergedReport.zone_id == zone_id,
+            MergedReport.ward_id == ward_id,
         )
     )
     if merged is not None and merged.status in {"draft", "published"}:
@@ -188,6 +206,7 @@ def upload_report_file(
         entity_id=rf.id,
         details={
             "zone_id": zone_id,
+            "ward_id": ward_id,
             "filename": safe_name,
             "version": next_version,
             "row_count": inspection.total_data_rows,
@@ -212,6 +231,7 @@ def list_report_files(
     customer_id: int | None = None,
     region_id: int | None = None,
     zone_id: int | None = None,
+    ward_id: int | None = None,
     include_deleted: bool = False,
 ) -> list[ReportFileOut]:
     stmt = (
@@ -235,6 +255,8 @@ def list_report_files(
         stmt = stmt.where(ReportFile.region_id == region_id)
     if zone_id is not None:
         stmt = stmt.where(ReportFile.zone_id == zone_id)
+    if ward_id is not None:
+        stmt = stmt.where(ReportFile.ward_id == ward_id)
 
     items = db.scalars(stmt).all()
     return [_serialize_report_file(db, item) for item in items]
@@ -407,6 +429,7 @@ def delete_report_file(
             MergedReport.customer_id == rf.customer_id,
             MergedReport.region_id == rf.region_id,
             MergedReport.zone_id == rf.zone_id,
+            MergedReport.ward_id == rf.ward_id,
         )
     )
     if merged is not None and merged.status in {"draft", "published"}:
@@ -418,7 +441,12 @@ def delete_report_file(
         action=f"{expected_type}.delete",
         entity_type="report_file",
         entity_id=rf.id,
-        details={"zone_id": rf.zone_id, "filename": rf.original_filename, "version": rf.version},
+        details={
+            "zone_id": rf.zone_id,
+            "ward_id": rf.ward_id,
+            "filename": rf.original_filename,
+            "version": rf.version,
+        },
         ip_address=ip_address,
     )
     db.commit()

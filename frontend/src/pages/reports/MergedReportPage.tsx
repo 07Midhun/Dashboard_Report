@@ -43,7 +43,14 @@ type PreviewTab =
 export function MergedReportPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { selection, selectedCustomer, selectedRegion, selectedZone, refreshTree } = useHierarchy();
+  const {
+    selection,
+    selectedCustomer,
+    selectedRegion,
+    selectedZone,
+    selectedWard,
+    refreshTree,
+  } = useHierarchy();
   const { showToast } = useToast();
 
   const isAdmin = user?.role === "admin";
@@ -95,7 +102,7 @@ export function MergedReportPage() {
     loadReports();
   }, [loadReports]);
 
-  const inspectZone = useCallback(
+  const inspectWard = useCallback(
     async (
       overrides?: {
         pole_sheet?: string;
@@ -105,7 +112,13 @@ export function MergedReportPage() {
       },
       scope: "all" | "pole" | "lamp" = "all"
     ) => {
-      if (!isAdmin || !selection.customerId || !selection.regionId || !selection.zoneId) {
+      if (
+        !isAdmin ||
+        !selection.customerId ||
+        !selection.regionId ||
+        !selection.zoneId ||
+        !selection.wardId
+      ) {
         setInspectData(null);
         return;
       }
@@ -115,6 +128,7 @@ export function MergedReportPage() {
           customer_id: selection.customerId,
           region_id: selection.regionId,
           zone_id: selection.zoneId,
+          ward_id: selection.wardId,
           ...overrides,
         });
         setInspectData(res);
@@ -165,16 +179,23 @@ export function MergedReportPage() {
         setInspecting(false);
       }
     },
-    [isAdmin, selection.customerId, selection.regionId, selection.zoneId, showToast]
+    [
+      isAdmin,
+      selection.customerId,
+      selection.regionId,
+      selection.zoneId,
+      selection.wardId,
+      showToast,
+    ]
   );
 
   useEffect(() => {
-    inspectZone();
-  }, [inspectZone]);
+    inspectWard();
+  }, [inspectWard]);
 
-  const activeZoneReport =
-    selection.zoneId != null
-      ? reports.find((r) => r.zone_id === selection.zoneId) ?? null
+  const activeWardReport =
+    selection.wardId != null
+      ? reports.find((r) => r.ward_id === selection.wardId) ?? null
       : null;
 
   const loadPreview = useCallback(
@@ -194,18 +215,25 @@ export function MergedReportPage() {
     [showToast]
   );
 
-  // Auto-load preview when zone has an existing Merged Report
+  // Auto-load preview when ward has an existing Merged Report
   useEffect(() => {
-    if (activeZoneReport) {
-      loadPreview(activeZoneReport.id);
+    if (activeWardReport) {
+      loadPreview(activeWardReport.id);
     } else {
       setPreviewData(null);
       setPreviewedVersion(null);
     }
-  }, [activeZoneReport?.id, activeZoneReport?.current_version, loadPreview]);
+  }, [activeWardReport?.id, activeWardReport?.current_version, loadPreview]);
 
   const handleGenerate = async () => {
-    if (!selection.customerId || !selection.regionId || !selection.zoneId) return;
+    if (
+      !selection.customerId ||
+      !selection.regionId ||
+      !selection.zoneId ||
+      !selection.wardId
+    ) {
+      return;
+    }
     if (!poleMap.pole_number_col || !poleMap.arm_count_col || !poleMap.lamp_type_col) {
       showToast(
         "error",
@@ -236,6 +264,7 @@ export function MergedReportPage() {
         customer_id: selection.customerId,
         region_id: selection.regionId,
         zone_id: selection.zoneId,
+        ward_id: selection.wardId,
         pole_survey_mapping: {
           ...poleMap,
           extra_mappings: validExtras,
@@ -286,6 +315,7 @@ export function MergedReportPage() {
   };
 
   const visibleReports = reports.filter((r) => {
+    if (selection.wardId) return r.ward_id === selection.wardId;
     if (selection.zoneId) return r.zone_id === selection.zoneId;
     if (selection.regionId) return r.region_id === selection.regionId;
     return true;
@@ -297,13 +327,13 @@ export function MergedReportPage() {
         <h1 className="text-2xl font-bold text-[#173042]">Merged Reports &amp; LED Reconciliation</h1>
         <p className="mt-1 text-sm text-[#718096]">
           {isAdmin
-            ? "Zone-isolated reconciliation engine preserving original Lamp Installation Excel formatting."
-            : "View processing summaries, preview records, and download published Merged Reports."}
+            ? "Ward-isolated reconciliation engine preserving original Lamp Installation Excel formatting."
+            : "View processing summaries, preview records, and download published ward Merged Reports."}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Zone Selector */}
+        {/* Left Ward Hierarchy Selector */}
         <div className="lg:col-span-4">
           <HierarchyExplorer />
         </div>
@@ -320,43 +350,44 @@ export function MergedReportPage() {
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-[#173042]">
-                      Zone Reconciliation Workspace
+                      Ward Reconciliation Workspace
                     </h2>
                     <p className="text-xs text-[#718096]">
-                      {selectedZone
-                        ? `${selectedCustomer?.customer_name} → ${selectedRegion?.region_name} → ${selectedZone.zone_name}`
-                        : "Select a specific zone on the left to inspect sources and generate"}
+                      {selectedWard && selectedZone
+                        ? `${selectedCustomer?.customer_name} → ${selectedRegion?.region_name} → ${selectedZone.zone_name} → ${selectedWard.ward_number} (${selectedWard.ward_name})`
+                        : "Expand a Zone and select a specific Ward on the left to inspect sources and generate"}
                     </p>
                   </div>
                 </div>
-                {activeZoneReport && <StatusBadge status={activeZoneReport.status} />}
+                {activeWardReport && <StatusBadge status={activeWardReport.status} />}
               </div>
 
-              {!selectedZone ? (
+              {!selectedWard ? (
                 <p className="py-8 text-center text-sm text-[#718096]">
-                  Please select a <strong className="text-[#075D6B]">Zone</strong> from the hierarchy
+                  Please select a <strong className="text-[#075D6B]">Ward</strong> (e.g.{" "}
+                  <span className="font-mono font-semibold">W108</span>) from the hierarchy
                   navigator to begin.
                 </p>
               ) : inspecting ? (
                 <p className="py-8 text-center text-xs text-[#718096]">
-                  Inspecting Pole Survey and Lamp Installation workbooks...
+                  Inspecting Pole Survey and Lamp Installation workbooks for {selectedWard.ward_number}...
                 </p>
               ) : inspectData ? (
                 <div className="mt-4 space-y-5">
                   {/* Outdated warning */}
-                  {activeZoneReport?.is_outdated && (
+                  {activeWardReport?.is_outdated && (
                     <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900">
                       <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                       <div>
                         <p className="font-bold">Merged Report is Outdated</p>
                         <p className="mt-0.5">
-                          Generated from Pole Survey v{activeZoneReport.source_pole_survey_version}{" "}
-                          and Lamp Installation v{activeZoneReport.source_lamp_installation_version}.
+                          Generated from Pole Survey v{activeWardReport.source_pole_survey_version}{" "}
+                          and Lamp Installation v{activeWardReport.source_lamp_installation_version}.
                           Active versions are Pole Survey v
-                          {activeZoneReport.active_pole_survey_version ?? "missing"} and Lamp
+                          {activeWardReport.active_pole_survey_version ?? "missing"} and Lamp
                           Installation v
-                          {activeZoneReport.active_lamp_installation_version ?? "missing"}.
-                          Regenerate below to update.
+                          {activeWardReport.active_lamp_installation_version ?? "missing"}.
+                          Regenerate below to update this ward.
                         </p>
                       </div>
                     </div>
@@ -392,7 +423,7 @@ export function MergedReportPage() {
                           {inspectData.pole_survey_file.row_count} rows)
                         </p>
                       ) : (
-                        <p className="mt-1 text-rose-700 font-medium">Not uploaded for this zone</p>
+                        <p className="mt-1 text-rose-700 font-medium">Not uploaded for this ward</p>
                       )}
                     </div>
 
@@ -415,7 +446,7 @@ export function MergedReportPage() {
                           {inspectData.lamp_installation_file.row_count} rows)
                         </p>
                       ) : (
-                        <p className="mt-1 text-rose-700 font-medium">Not uploaded for this zone</p>
+                        <p className="mt-1 text-rose-700 font-medium">Not uploaded for this ward</p>
                       )}
                     </div>
                   </div>
@@ -452,7 +483,7 @@ export function MergedReportPage() {
                               <select
                                 value={poleMap.sheet_name || ""}
                                 onChange={(e) =>
-                                  inspectZone(
+                                  inspectWard(
                                     {
                                       pole_sheet: e.target.value,
                                       pole_header_row: poleMap.header_row_index ?? undefined,
@@ -481,7 +512,7 @@ export function MergedReportPage() {
                                 max={50}
                                 value={poleMap.header_row_index ?? 1}
                                 onChange={(e) =>
-                                  inspectZone(
+                                  inspectWard(
                                     {
                                       pole_sheet: poleMap.sheet_name ?? undefined,
                                       pole_header_row: Number(e.target.value) || 1,
@@ -536,7 +567,7 @@ export function MergedReportPage() {
                               <select
                                 value={lampMap.sheet_name || ""}
                                 onChange={(e) =>
-                                  inspectZone(
+                                  inspectWard(
                                     {
                                       pole_sheet: poleMap.sheet_name ?? undefined,
                                       pole_header_row: poleMap.header_row_index ?? undefined,
@@ -565,7 +596,7 @@ export function MergedReportPage() {
                                 max={50}
                                 value={lampMap.header_row_index ?? 1}
                                 onChange={(e) =>
-                                  inspectZone(
+                                  inspectWard(
                                     {
                                       pole_sheet: poleMap.sheet_name ?? undefined,
                                       pole_header_row: poleMap.header_row_index ?? undefined,
@@ -720,7 +751,7 @@ export function MergedReportPage() {
                           <Play className="h-4 w-4" />
                           {generating
                             ? "Processing Reconciliation..."
-                            : activeZoneReport
+                            : activeWardReport
                             ? "Regenerate Merged Report"
                             : "Generate Merged Report"}
                         </button>
@@ -746,7 +777,8 @@ export function MergedReportPage() {
                     <div>
                       <div className="flex items-center gap-2.5">
                         <h3 className="text-sm font-bold text-[#173042]">
-                          {previewData.merged_report.zone_name} — Merged Report v
+                          {previewData.merged_report.zone_name} • {previewData.merged_report.ward_number} (
+                          {previewData.merged_report.ward_name}) — Merged Report v
                           {previewedVersion ?? previewData.merged_report.current_version}
                         </h3>
                         <StatusBadge
@@ -800,7 +832,7 @@ export function MergedReportPage() {
                           const ver = previewedVersion ?? previewData.merged_report.current_version;
                           mergedReportsApi.download(
                             previewData.merged_report.id,
-                            `Merged_Report_${previewData.merged_report.zone_name}_v${ver}.xlsx`,
+                            `Merged_Report_${previewData.merged_report.zone_name}_${previewData.merged_report.ward_number}_v${ver}.xlsx`,
                             ver
                           );
                         }}
@@ -1320,7 +1352,7 @@ export function MergedReportPage() {
                                 onClick={() =>
                                   mergedReportsApi.download(
                                     previewData.merged_report.id,
-                                    `Merged_${previewData.merged_report.zone_name}_v${ver.version}.xlsx`,
+                                    `Merged_${previewData.merged_report.zone_name}_${previewData.merged_report.ward_number}_v${ver.version}.xlsx`,
                                     ver.version
                                   )
                                 }
@@ -1361,7 +1393,7 @@ export function MergedReportPage() {
                 <table className="min-w-full text-left text-xs">
                   <thead className="bg-slate-50 text-[#718096]">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Region / Zone</th>
+                      <th className="px-4 py-3 font-semibold">Ward / Zone / Region</th>
                       <th className="px-4 py-3 font-semibold">Version</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3 font-semibold">Summary</th>
@@ -1372,8 +1404,15 @@ export function MergedReportPage() {
                     {visibleReports.map((mr) => (
                       <tr key={mr.id} className="hover:bg-slate-50/70">
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-[#173042]">{mr.zone_name}</p>
-                          <p className="text-[11px] text-[#718096]">{mr.region_name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#075D6B] border border-teal-200">
+                              {mr.ward_number}
+                            </span>
+                            <span className="font-semibold text-[#173042]">{mr.ward_name}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-[#718096]">
+                            {mr.region_name} • {mr.zone_name}
+                          </p>
                         </td>
                         <td className="px-4 py-3 font-mono font-semibold text-[#075D6B]">
                           v{mr.current_version}
@@ -1407,7 +1446,7 @@ export function MergedReportPage() {
                               onClick={() =>
                                 mergedReportsApi.download(
                                   mr.id,
-                                  `Merged_${mr.zone_name}_v${mr.current_version}.xlsx`
+                                  `Merged_${mr.zone_name}_${mr.ward_number}_v${mr.current_version}.xlsx`
                                 )
                               }
                               className="inline-flex items-center gap-1 rounded-lg bg-[#075D6B] px-2.5 py-1 font-semibold text-white hover:bg-[#0D7780]"
@@ -1429,7 +1468,7 @@ export function MergedReportPage() {
       <ConfirmModal
         open={publishConfirmId !== null}
         title="Publish Merged Report?"
-        message="Publishing makes this reconciled Excel workbook and processing summary immediately accessible (read-only) to all Customer users assigned to this region."
+        message="Publishing makes this ward's reconciled Excel workbook and processing summary immediately accessible (read-only) to all Customer users assigned to this customer/ward."
         confirmLabel="Publish Report"
         loading={publishing}
         onConfirm={handlePublish}

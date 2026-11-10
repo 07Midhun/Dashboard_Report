@@ -9,6 +9,7 @@ import { AdminDashboardPage } from "./pages/admin/AdminDashboardPage";
 import { CustomersPage } from "./pages/admin/CustomersPage";
 import { RegionsPage } from "./pages/admin/RegionsPage";
 import { ZonesPage } from "./pages/admin/ZonesPage";
+import { WardsPage } from "./pages/admin/WardsPage";
 import { UsersPage } from "./pages/admin/UsersPage";
 import { UploadHistoryPage } from "./pages/admin/UploadHistoryPage";
 import { SettingsPage } from "./pages/admin/SettingsPage";
@@ -100,6 +101,14 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/admin/wards"
+                  element={
+                    <AdminRoute>
+                      <WardsPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
                   path="/admin/upload-history"
                   element={
                     <AdminRoute>
@@ -133,4 +142,3 @@ export default function App() {
     </ToastProvider>
   );
 }
-

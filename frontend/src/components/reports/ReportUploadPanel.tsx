@@ -12,7 +12,10 @@ export function ReportUploadPanel({
   customerId,
   regionId,
   zoneId,
+  wardId,
   zoneName,
+  wardNumber,
+  wardName,
   existingReport,
   onUploaded,
 }: {
@@ -20,7 +23,10 @@ export function ReportUploadPanel({
   customerId: number;
   regionId: number;
   zoneId: number;
+  wardId: number;
   zoneName: string;
+  wardNumber: string;
+  wardName: string;
   existingReport: ReportFile | null;
   onUploaded: (file: ReportFile) => void;
 }) {
@@ -35,6 +41,7 @@ export function ReportUploadPanel({
   const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
 
   const label = reportType === "pole_survey" ? "Pole Survey Report" : "Lamp Installation Report";
+  const wardLabel = `${wardNumber} (${wardName})`;
 
   const handleFilePick = (file: File | null) => {
     setErrorMsg(null);
@@ -60,6 +67,7 @@ export function ReportUploadPanel({
     formData.append("customer_id", String(customerId));
     formData.append("region_id", String(regionId));
     formData.append("zone_id", String(zoneId));
+    formData.append("ward_id", String(wardId));
     formData.append("replace_existing", String(replaceExisting));
     formData.append("file", selectedFile);
 
@@ -68,7 +76,7 @@ export function ReportUploadPanel({
       showToast(
         "success",
         `${label} Uploaded`,
-        `${saved.original_filename} (v${saved.version}, ${saved.row_count} rows) saved for ${zoneName}.`
+        `${saved.original_filename} (v${saved.version}, ${saved.row_count} rows) saved for ${wardLabel} in ${zoneName}.`
       );
       setSelectedFile(null);
       setConfirmReplaceOpen(false);
@@ -100,8 +108,11 @@ export function ReportUploadPanel({
             {existingReport ? `Replace ${label}` : `Upload ${label}`}
           </h3>
           <p className="text-xs text-[#718096] mt-0.5">
-            Target Zone: <strong className="text-[#075D6B]">{zoneName}</strong> • Supports .xlsx
-            (recommended for formatting) and .xls
+            Target Ward:{" "}
+            <strong className="text-[#075D6B]">
+              {wardLabel}
+            </strong>{" "}
+            <span className="text-slate-400">({zoneName})</span> • Supports .xlsx (recommended for formatting) and .xls
           </p>
         </div>
         {reportType === "lamp_installation" && (
@@ -156,7 +167,7 @@ export function ReportUploadPanel({
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[#173042]">{selectedFile.name}</p>
               <p className="text-xs text-[#718096]">
-                {formatBytes(selectedFile.size)} • Ready to validate &amp; upload
+                {formatBytes(selectedFile.size)} • Ready to validate &amp; upload to {wardNumber}
               </p>
             </div>
           </div>
@@ -213,7 +224,7 @@ export function ReportUploadPanel({
       <ConfirmModal
         open={confirmReplaceOpen}
         title={`Replace Existing ${label}?`}
-        message={`Zone "${zoneName}" already has "${existingReport?.original_filename}" (v${existingReport?.version}). Uploading "${selectedFile?.name}" will create version ${(existingReport?.version ?? 0) + 1} while preserving previous versions in upload history, and will mark any existing Merged Report for this zone as outdated.`}
+        message={`Ward "${wardLabel}" in "${zoneName}" already has "${existingReport?.original_filename}" (v${existingReport?.version}). Uploading "${selectedFile?.name}" will create version ${(existingReport?.version ?? 0) + 1} while preserving previous versions in upload history, and will mark any existing Merged Report for this ward as outdated.`}
         confirmLabel="Confirm Replacement"
         loading={uploading}
         onConfirm={() => executeUpload(true)}
@@ -222,4 +233,3 @@ export function ReportUploadPanel({
     </div>
   );
 }
-

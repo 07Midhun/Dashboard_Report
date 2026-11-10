@@ -25,6 +25,11 @@ class ReportFileOut(BaseModel):
     region_name: str
     zone_id: int
     zone_name: str
+    zone_code: str | None = None
+    ward_id: int
+    ward_name: str
+    ward_number: str
+    ward_code: str
     report_type: str
     original_filename: str
     file_size: int
@@ -72,6 +77,7 @@ class MergedReportInspectOut(BaseModel):
     customer_id: int
     region_id: int
     zone_id: int
+    ward_id: int
     pole_survey_ready: bool
     lamp_installation_ready: bool
     pole_survey_file: ReportFileOut | None = None
@@ -98,6 +104,7 @@ class MergedReportGenerateRequest(BaseModel):
     customer_id: int
     region_id: int
     zone_id: int
+    ward_id: int
     pole_survey_mapping: MappingInput
     lamp_installation_mapping: MappingInput
     save_mapping: bool = True
@@ -142,6 +149,11 @@ class MergedReportOut(BaseModel):
     region_name: str
     zone_id: int
     zone_name: str
+    zone_code: str | None = None
+    ward_id: int
+    ward_name: str
+    ward_number: str
+    ward_code: str
     current_version: int
     status: str
     is_outdated: bool = False
@@ -178,6 +190,9 @@ class RecentUploadItem(BaseModel):
     customer_name: str
     region_name: str
     zone_name: str
+    ward_id: int
+    ward_number: str
+    ward_name: str
     uploaded_by_name: str | None
     uploaded_at: datetime
 
@@ -187,6 +202,9 @@ class RecentMergedItem(BaseModel):
     customer_name: str
     region_name: str
     zone_name: str
+    ward_id: int
+    ward_number: str
+    ward_name: str
     current_version: int
     status: str
     added_records: int
@@ -199,6 +217,9 @@ class ProcessingActivityItem(BaseModel):
     customer_name: str
     region_name: str
     zone_name: str
+    ward_id: int
+    ward_number: str
+    ward_name: str
     processing_status: str
     added_records: int
     duplicate_records: int
@@ -214,16 +235,43 @@ class RegionAvailabilityItem(BaseModel):
     region_id: int
     region_name: str
     total_zones: int
+    total_wards: int = 0
     pole_survey_count: int
     lamp_installation_count: int
     merged_published_count: int
     merged_draft_or_outdated_count: int
+    awaiting_uploads_count: int = 0
+    error_wards_count: int = 0
+
+
+class ZoneAvailabilityItem(BaseModel):
+    customer_id: int
+    customer_name: str
+    region_id: int
+    region_name: str
+    zone_id: int
+    zone_name: str
+    zone_code: str | None = None
+    total_wards: int = 0
+    pole_survey_count: int = 0
+    lamp_installation_count: int = 0
+    merged_published_count: int = 0
+    merged_draft_or_outdated_count: int = 0
+    awaiting_uploads_count: int = 0
+    error_wards_count: int = 0
 
 
 class AdminDashboardOut(BaseModel):
     total_customers: int
     total_regions: int
     total_zones: int
+    total_wards: int
+    wards_with_pole_survey: int
+    wards_with_lamp_installation: int
+    wards_with_completed_merged: int
+    wards_with_published_merged: int
+    wards_awaiting_uploads: int
+    wards_with_processing_errors: int
     total_pole_survey_reports: int
     total_lamp_installation_reports: int
     total_merged_reports: int
@@ -232,16 +280,23 @@ class AdminDashboardOut(BaseModel):
     latest_processing_activity: list[ProcessingActivityItem]
     failed_processing_records: list[ProcessingActivityItem]
     report_availability_by_region: list[RegionAvailabilityItem]
+    zone_availability: list[ZoneAvailabilityItem] = Field(default_factory=list)
 
 
 class CustomerDashboardOut(BaseModel):
     customer_names: list[str]
     total_regions: int
     total_zones: int
+    total_wards: int
+    wards_with_pole_survey: int
+    wards_with_lamp_installation: int
+    wards_with_completed_merged: int
+    wards_awaiting_uploads: int
     available_pole_survey_count: int
     available_lamp_installation_count: int
     available_merged_count: int
     last_updated_at: datetime | None
     recent_available_reports: list[dict[str, Any]]
     region_availability: list[RegionAvailabilityItem]
+    zone_availability: list[ZoneAvailabilityItem] = Field(default_factory=list)
 

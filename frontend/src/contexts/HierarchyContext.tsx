@@ -1,12 +1,18 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { hierarchyApi } from "../services/endpoints";
-import type { HierarchyCustomerNode, HierarchyRegionNode, HierarchyZoneNode } from "../types";
+import type {
+  HierarchyCustomerNode,
+  HierarchyRegionNode,
+  HierarchyWardNode,
+  HierarchyZoneNode,
+} from "../types";
 import { useAuth } from "./AuthContext";
 
 interface HierarchySelection {
   customerId: number | null;
   regionId: number | null;
   zoneId: number | null;
+  wardId: number | null;
 }
 
 interface HierarchyContextValue {
@@ -16,9 +22,11 @@ interface HierarchyContextValue {
   selectedCustomer: HierarchyCustomerNode | null;
   selectedRegion: HierarchyRegionNode | null;
   selectedZone: HierarchyZoneNode | null;
+  selectedWard: HierarchyWardNode | null;
   selectCustomer: (customerId: number | null) => void;
   selectRegion: (customerId: number, regionId: number) => void;
   selectZone: (customerId: number, regionId: number, zoneId: number) => void;
+  selectWard: (customerId: number, regionId: number, zoneId: number, wardId: number) => void;
   clearSelection: () => void;
   refreshTree: () => Promise<void>;
 }
@@ -33,6 +41,7 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
     customerId: null,
     regionId: null,
     zoneId: null,
+    wardId: null,
   });
 
   const refreshTree = useCallback(async () => {
@@ -52,10 +61,12 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
           if (c) {
             const r = prev.regionId ? c.regions.find((rg) => rg.id === prev.regionId) : null;
             const z = r && prev.zoneId ? r.zones.find((zn) => zn.id === prev.zoneId) : null;
+            const w = z && prev.wardId ? z.wards.find((wd) => wd.id === prev.wardId) : null;
             return {
               customerId: c.id,
               regionId: r ? r.id : null,
               zoneId: z ? z.id : null,
+              wardId: w ? w.id : null,
             };
           }
         }
@@ -65,9 +76,10 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
             customerId: firstC.id,
             regionId: null,
             zoneId: null,
+            wardId: null,
           };
         }
-        return { customerId: null, regionId: null, zoneId: null };
+        return { customerId: null, regionId: null, zoneId: null, wardId: null };
       });
     } finally {
       setLoading(false);
@@ -79,19 +91,31 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
   }, [refreshTree]);
 
   const selectCustomer = useCallback((customerId: number | null) => {
-    setSelection({ customerId, regionId: null, zoneId: null });
+    setSelection({ customerId, regionId: null, zoneId: null, wardId: null });
   }, []);
 
   const selectRegion = useCallback((customerId: number, regionId: number) => {
-    setSelection({ customerId, regionId, zoneId: null });
+    setSelection({ customerId, regionId, zoneId: null, wardId: null });
   }, []);
 
   const selectZone = useCallback((customerId: number, regionId: number, zoneId: number) => {
-    setSelection({ customerId, regionId, zoneId });
+    setSelection({ customerId, regionId, zoneId, wardId: null });
   }, []);
 
+  const selectWard = useCallback(
+    (customerId: number, regionId: number, zoneId: number, wardId: number) => {
+      setSelection({ customerId, regionId, zoneId, wardId });
+    },
+    []
+  );
+
   const clearSelection = useCallback(() => {
-    setSelection((prev) => ({ customerId: prev.customerId, regionId: null, zoneId: null }));
+    setSelection((prev) => ({
+      customerId: prev.customerId,
+      regionId: null,
+      zoneId: null,
+      wardId: null,
+    }));
   }, []);
 
   const selectedCustomer = tree.find((c) => c.id === selection.customerId) ?? null;
@@ -99,6 +123,8 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
     selectedCustomer?.regions.find((r) => r.id === selection.regionId) ?? null;
   const selectedZone =
     selectedRegion?.zones.find((z) => z.id === selection.zoneId) ?? null;
+  const selectedWard =
+    selectedZone?.wards.find((w) => w.id === selection.wardId) ?? null;
 
   return (
     <HierarchyContext.Provider
@@ -109,9 +135,11 @@ export function HierarchyProvider({ children }: { children: React.ReactNode }) {
         selectedCustomer,
         selectedRegion,
         selectedZone,
+        selectedWard,
         selectCustomer,
         selectRegion,
         selectZone,
+        selectWard,
         clearSelection,
         refreshTree,
       }}
@@ -126,4 +154,3 @@ export function useHierarchy() {
   if (!ctx) throw new Error("useHierarchy must be used inside HierarchyProvider");
   return ctx;
 }
-

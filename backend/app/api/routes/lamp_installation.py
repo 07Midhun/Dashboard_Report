@@ -24,6 +24,7 @@ async def upload_lamp_installation(
     customer_id: int = Form(...),
     region_id: int = Form(...),
     zone_id: int = Form(...),
+    ward_id: int = Form(...),
     replace_existing: bool = Form(default=False),
     file: UploadFile = File(...),
     auth: AuthContext = Depends(require_admin),
@@ -35,6 +36,7 @@ async def upload_lamp_installation(
         customer_id=customer_id,
         region_id=region_id,
         zone_id=zone_id,
+        ward_id=ward_id,
         report_type="lamp_installation",
         filename=file.filename or "lamp_installation.xlsx",
         content=content,
@@ -49,6 +51,7 @@ def list_lamp_installations(
     customer_id: int | None = Query(default=None),
     region_id: int | None = Query(default=None),
     zone_id: int | None = Query(default=None),
+    ward_id: int | None = Query(default=None),
     include_deleted: bool = Query(default=False),
     auth: AuthContext = Depends(get_current_auth),
     db: Session = Depends(get_db),
@@ -60,6 +63,7 @@ def list_lamp_installations(
         customer_id=customer_id,
         region_id=region_id,
         zone_id=zone_id,
+        ward_id=ward_id,
         include_deleted=include_deleted,
     )
 

@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   GitMerge,
   History,
+  Layers,
   LayoutDashboard,
   Lightbulb,
   LogOut,
@@ -29,7 +30,7 @@ import { SchnellLogo } from "../components/common/SchnellLogo";
 
 export function MainLayout() {
   const { user, logout } = useAuth();
-  const { selectedCustomer, selectedRegion, selectedZone } = useHierarchy();
+  const { selectedCustomer, selectedRegion, selectedZone, selectedWard } = useHierarchy();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -203,6 +204,14 @@ export function MainLayout() {
               <span>Zone Management</span>
             </NavLink>
             <NavLink
+              to="/admin/wards"
+              onClick={() => setSidebarOpen(false)}
+              className={navItemClass}
+            >
+              <Layers className="h-4 w-4 shrink-0" />
+              <span>Ward Management</span>
+            </NavLink>
+            <NavLink
               to="/admin/upload-history"
               onClick={() => setSidebarOpen(false)}
               className={navItemClass}
@@ -236,7 +245,7 @@ export function MainLayout() {
     <div className="min-h-screen flex flex-col bg-[#F4F7F9]">
       {/* Dark Teal Top Navigation Bar */}
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-[#075D6B] px-4 lg:px-6 text-white shadow-sm">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={() => setSidebarOpen((v) => !v)}
@@ -247,22 +256,37 @@ export function MainLayout() {
           </button>
           <SchnellLogo />
 
-          {/* Active Hierarchy Breadcrumb */}
+          {/* Active 4-Level Hierarchy Breadcrumb */}
           {selectedCustomer && (
-            <div className="hidden md:flex items-center gap-1.5 ml-6 rounded-full bg-white/10 px-3.5 py-1.5 text-xs text-teal-50">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-[#18A6A0]" />
-              <span className="font-semibold">{selectedCustomer.customer_name}</span>
+            <div className="hidden md:flex items-center gap-1.5 ml-4 rounded-full bg-white/10 px-3.5 py-1.5 text-xs text-teal-50 truncate">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-[#18A6A0] shrink-0" />
+              <span className="font-semibold truncate">{selectedCustomer.customer_name}</span>
               {selectedRegion && (
                 <>
-                  <ChevronRight className="h-3.5 w-3.5 text-teal-200/70" />
-                  <span className="font-medium">{selectedRegion.region_name}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-teal-200/70 shrink-0" />
+                  <span className="font-medium truncate">{selectedRegion.region_name}</span>
                 </>
               )}
               {selectedZone && (
                 <>
-                  <ChevronRight className="h-3.5 w-3.5 text-teal-200/70" />
-                  <span className="rounded bg-[#18A6A0] px-1.5 py-0.5 font-semibold text-white">
+                  <ChevronRight className="h-3.5 w-3.5 text-teal-200/70 shrink-0" />
+                  <span
+                    className={`truncate ${
+                      selectedWard
+                        ? "font-medium"
+                        : "rounded bg-[#18A6A0] px-1.5 py-0.5 font-semibold text-white"
+                    }`}
+                  >
                     {selectedZone.zone_name}
+                    {selectedZone.zone_code ? ` (${selectedZone.zone_code})` : ""}
+                  </span>
+                </>
+              )}
+              {selectedWard && (
+                <>
+                  <ChevronRight className="h-3.5 w-3.5 text-teal-200/70 shrink-0" />
+                  <span className="rounded bg-[#18A6A0] px-2 py-0.5 font-semibold text-white shrink-0">
+                    {selectedWard.ward_number} • {selectedWard.ward_name}
                   </span>
                 </>
               )}
@@ -271,7 +295,7 @@ export function MainLayout() {
         </div>
 
         {/* User profile & logout */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="hidden sm:flex flex-col items-end leading-tight">
             <span className="text-sm font-semibold text-white">{user?.name}</span>
             <span className="text-[11px] font-medium uppercase tracking-wider text-teal-200">
@@ -299,7 +323,7 @@ export function MainLayout() {
           {renderNavLinks()}
           <div className="border-t border-white/10 p-4 text-[11px] text-teal-200/75">
             <p className="font-semibold text-white/90">Schnell Asset Platform</p>
-            <p className="mt-0.5">Zone-Isolated LED Reconciliation</p>
+            <p className="mt-0.5">Ward-Isolated LED Reconciliation</p>
           </div>
         </aside>
 
@@ -334,4 +358,3 @@ export function MainLayout() {
     </div>
   );
 }
-

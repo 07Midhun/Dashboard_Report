@@ -1,22 +1,22 @@
 # SCHNELL – Electrical Asset Report Management Dashboard
 
-Enterprise full-stack platform for managing region- and zone-wise **Pole Survey Reports**, **Lamp Installation Reports**, and automated **Merged Reports** with strict Excel template formatting preservation, role-based access control, and configurable external portal links.
+Enterprise full-stack platform for managing region-, zone-, and ward-wise **Pole Survey Reports**, **Lamp Installation Reports**, and automated **Merged Reports** with strict Excel template formatting preservation, role-based access control, and configurable external portal links.
 
 ---
 
 ## Core Capabilities
 
-- **Dynamic Hierarchy:** `Customer → Region → Zone → Reports` stored in PostgreSQL and extensible by administrators.
+- **4-Level Dynamic Hierarchy:** `Customer → Region → Zone → Ward → Reports` stored in PostgreSQL and extensible by administrators. The **Ward** is the lowest and sole operational level at which uploads, previews, and Merged Report reconciliation occur.
 - **Role-Based Access Control (Backend-Enforced):**
-  - **Admin:** Full management of customers, regions, zones, user accounts, file uploads/replacements/deletions, column mappings, LED classification rules, Merged Report generation/publishing, external links, and audit logs.
-  - **Customer:** Strictly read-only access scoped to assigned customers; can preview, search, filter, and download active source workbooks and published Merged Reports.
-- **Merged Report Reconciliation Engine:**
-  - Processes strictly within the selected `(customer, region, zone)` — never mixing zones.
+  - **Admin:** Full management of customers, regions, zones, wards, user accounts, ward-level file uploads/replacements/deletions, column mappings, LED classification rules, Merged Report generation/publishing, external links, and audit logs.
+  - **Customer:** Strictly read-only access scoped to assigned customers; can search/select wards and preview, filter, and download active source workbooks and published Merged Reports.
+- **Ward-Isolated Merged Report Reconciliation Engine:**
+  - Processes strictly within the selected `(customer, region, zone, ward)` — never mixing or comparing poles across wards even within the same zone.
   - Extracts `Pole Number`, `Arm Count`, and `Lamp Type` via saved/confirmed column mappings.
   - Identifies LED records case-insensitively and flags unknown lamp types for review.
-  - Deduplicates Pole Survey LED poles (first occurrence kept) and assigns sequential `L1..Ln` positions **before** comparing against Lamp Installation, skipping existing poles without shifting sequence numbers.
-  - Writes `OriginalPoleNumber-Ln` directly into the existing **Pole Number** cell while preserving original Lamp Installation sheets, styles, borders, widths, heights, freeze panes, filters, print setup, and formulas.
-- **Persistent Versioned Storage:** Source files and generated Merged Reports are stored safely outside temp folders with immutable version history and stale report detection.
+  - Deduplicates Pole Survey LED poles within that ward (first occurrence kept) and assigns sequential `L1..Ln` positions **before** comparing against that ward's Lamp Installation, skipping existing poles without shifting sequence numbers.
+  - Writes `OriginalPoleNumber-Ln` directly into the existing **Pole Number** cell while preserving original Lamp Installation sheets, styles, borders, widths, heights, freeze panes, filters, print setup, and formulas per ward.
+- **Persistent Versioned Storage:** Ward-scoped source files and generated Merged Reports are stored safely outside temp folders (`customer_<id>/region_<id>/zone_<id>/ward_<id>/`) with immutable version history and per-ward stale report detection.
 
 ---
 
@@ -51,10 +51,17 @@ alembic upgrade head
 python app/database/cli_seed.py
 ```
 
-Default seeded sample hierarchy:
+Default seeded sample hierarchy (**57 individual wards across 7 zones**):
 - Customer: `Bangalore (BBMP)`
-- Region `BOMMANAHALLI` → Zone `Bommanahalli`
-- Region `EAST` → Zones `CV Raman Nagar`, `Hebbal`, `Pulakeshi Nagar`, `Sarvagna Nagar`, `Shanthi Nagar`, `Sivaji Nagar`
+- Region `BOMMANAHALLI`:
+  - `Bommanahalli (BMH)` → `W202`–`W212` (11 wards)
+- Region `EAST`:
+  - `CV Raman Nagar (CVRN)` → `W108`–`W115` (8 wards)
+  - `Hebbal (HEB)` → `W61`–`W68` (8 wards)
+  - `Pulakeshi Nagar (PN)` → `W69`–`W75` (7 wards)
+  - `Sarvagna Nagar (SN)` → `W76`–`W85` (10 wards)
+  - `Shanthi Nagar (SNTR)` → `W166`–`W172` (7 wards)
+  - `Sivaji Nagar (SVJR)` → `W116`–`W121` (6 wards)
 
 ### 4. Start Backend API
 ```bash

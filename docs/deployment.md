@@ -63,13 +63,18 @@ All uploaded source Excel workbooks and generated Merged Reports + preview JSON 
 
 ```text
 <STORAGE_ROOT>/
-  ├── customer_<id>/
-  │     └── region_<id>/
-  │           └── zone_<id>/
-  │                 ├── pole_survey/v1.xlsx
-  │                 ├── lamp_installation/v1.xlsx
-  │                 ├── merged_reports/v1.xlsx
-  │                 └── merged_previews/v1.json
+  ├── customers/
+  │     └── <customer_id>/
+  │           └── regions/
+  │                 └── <region_id>/
+  │                       └── zones/
+  │                             └── <zone_id>/
+  │                                   └── wards/
+  │                                         └── <ward_id>/
+  │                                               ├── pole_survey/v1_<uuid>.xlsx
+  │                                               ├── lamp_installation/v1_<uuid>.xlsx
+  │                                               ├── merged_reports/v1_<uuid>.xlsx
+  │                                               └── merged_previews/v1_<uuid>.json
   └── _tmp/
 ```
 

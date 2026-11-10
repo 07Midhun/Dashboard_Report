@@ -15,6 +15,7 @@ from app.api.routes import (
     merged_reports,
     pole_survey,
     regions,
+    wards,
     zones,
 )
 from app.core.config import settings
@@ -53,6 +54,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
 app.include_router(regions.router, prefix="/api")
 app.include_router(zones.router, prefix="/api")
+app.include_router(wards.router, prefix="/api")
 app.include_router(hierarchy.router, prefix="/api")
 app.include_router(pole_survey.router, prefix="/api")
 app.include_router(lamp_installation.router, prefix="/api")

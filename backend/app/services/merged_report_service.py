@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import AuthContext, verify_customer_access
 from app.models.config_models import ColumnMapping, LedClassificationRule
-from app.models.hierarchy import Customer, Region, Zone
+from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.report import (
     MergedReport,
     MergedReportVersion,
@@ -28,7 +28,7 @@ from app.schemas.reports import (
 from app.services.audit_service import record_audit_log
 from app.services.excel_reader_service import inspect_workbook
 from app.services.excel_writer_service import write_merged_workbook
-from app.services.hierarchy_service import validate_zone_hierarchy
+from app.services.hierarchy_service import validate_ward_hierarchy
 from app.services.led_classifier_service import LedClassifier, RuleSpec
 from app.services.reconciliation_engine import (
     MappingSpec,
@@ -97,7 +97,7 @@ def _upsert_saved_mapping(
 
 
 def _get_active_source_pair(
-    db: Session, *, customer_id: int, region_id: int, zone_id: int
+    db: Session, *, customer_id: int, region_id: int, zone_id: int, ward_id: int
 ) -> tuple[ReportFile | None, ReportFile | None]:
     pole_survey = db.scalar(
         select(ReportFile)
@@ -106,6 +106,7 @@ def _get_active_source_pair(
             ReportFile.customer_id == customer_id,
             ReportFile.region_id == region_id,
             ReportFile.zone_id == zone_id,
+            ReportFile.ward_id == ward_id,
             ReportFile.report_type == "pole_survey",
             ReportFile.status == "active",
         )
@@ -117,6 +118,7 @@ def _get_active_source_pair(
             ReportFile.customer_id == customer_id,
             ReportFile.region_id == region_id,
             ReportFile.zone_id == zone_id,
+            ReportFile.ward_id == ward_id,
             ReportFile.report_type == "lamp_installation",
             ReportFile.status == "active",
         )
@@ -124,20 +126,31 @@ def _get_active_source_pair(
     return pole_survey, lamp_inst
 
 
-def inspect_zone_sources(
+def inspect_ward_sources(
     db: Session,
     *,
     customer_id: int,
     region_id: int,
     zone_id: int,
+    ward_id: int,
     pole_sheet: str | None = None,
     pole_header_row: int | None = None,
     lamp_sheet: str | None = None,
     lamp_header_row: int | None = None,
 ) -> MergedReportInspectOut:
-    validate_zone_hierarchy(db, customer_id=customer_id, region_id=region_id, zone_id=zone_id)
+    validate_ward_hierarchy(
+        db,
+        customer_id=customer_id,
+        region_id=region_id,
+        zone_id=zone_id,
+        ward_id=ward_id,
+    )
     pole_file, lamp_file = _get_active_source_pair(
-        db, customer_id=customer_id, region_id=region_id, zone_id=zone_id
+        db,
+        customer_id=customer_id,
+        region_id=region_id,
+        zone_id=zone_id,
+        ward_id=ward_id,
     )
 
     missing_parts: list[str] = []
@@ -150,13 +163,14 @@ def inspect_zone_sources(
     blocking_error: str | None = None
     if missing_parts:
         blocking_error = (
-            f"Cannot generate Merged Report: missing {' and '.join(missing_parts)} for the selected zone."
+            f"Cannot generate Merged Report: missing {' and '.join(missing_parts)} for the selected ward."
         )
 
     out = MergedReportInspectOut(
         customer_id=customer_id,
         region_id=region_id,
         zone_id=zone_id,
+        ward_id=ward_id,
         pole_survey_ready=pole_file is not None,
         lamp_installation_ready=lamp_file is not None,
         pole_survey_file=_serialize_report_file(db, pole_file) if pole_file else None,
@@ -225,10 +239,15 @@ def _serialize_merged_report(
     cust = db.get(Customer, mr.customer_id)
     reg = db.get(Region, mr.region_id)
     zone = db.get(Zone, mr.zone_id)
+    ward = db.get(Ward, mr.ward_id)
     gen_user = db.get(User, mr.generated_by)
 
     active_pole, active_lamp = _get_active_source_pair(
-        db, customer_id=mr.customer_id, region_id=mr.region_id, zone_id=mr.zone_id
+        db,
+        customer_id=mr.customer_id,
+        region_id=mr.region_id,
+        zone_id=mr.zone_id,
+        ward_id=mr.ward_id,
     )
     active_pole_ver = active_pole.version if active_pole else None
     active_lamp_ver = active_lamp.version if active_lamp else None
@@ -314,6 +333,11 @@ def _serialize_merged_report(
         region_name=reg.region_name if reg else "",
         zone_id=mr.zone_id,
         zone_name=zone.zone_name if zone else "",
+        zone_code=zone.zone_code if zone else None,
+        ward_id=mr.ward_id,
+        ward_name=ward.ward_name if ward else "",
+        ward_number=ward.ward_number if ward else "",
+        ward_code=ward.ward_code if ward else "",
         current_version=display_version,
         status=display_status,
         is_outdated=is_outdated if is_admin else False,
@@ -338,17 +362,19 @@ def generate_merged_report(
     user_id: int,
     ip_address: str | None,
 ) -> MergedReportPreviewOut:
-    validate_zone_hierarchy(
+    validate_ward_hierarchy(
         db,
         customer_id=payload.customer_id,
         region_id=payload.region_id,
         zone_id=payload.zone_id,
+        ward_id=payload.ward_id,
     )
     pole_file, lamp_file = _get_active_source_pair(
         db,
         customer_id=payload.customer_id,
         region_id=payload.region_id,
         zone_id=payload.zone_id,
+        ward_id=payload.ward_id,
     )
     if pole_file is None or lamp_file is None:
         missing = []
@@ -358,7 +384,7 @@ def generate_merged_report(
             missing.append("Lamp Installation Report")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot generate Merged Report: missing {' and '.join(missing)} for this zone.",
+            detail=f"Cannot generate Merged Report: missing {' and '.join(missing)} for this ward.",
         )
 
     pole_abs = storage_service.get_absolute_path(pole_file.storage_path)
@@ -406,6 +432,7 @@ def generate_merged_report(
             MergedReport.customer_id == payload.customer_id,
             MergedReport.region_id == payload.region_id,
             MergedReport.zone_id == payload.zone_id,
+            MergedReport.ward_id == payload.ward_id,
         )
     )
 
@@ -427,6 +454,7 @@ def generate_merged_report(
                 customer_id=payload.customer_id,
                 region_id=payload.region_id,
                 zone_id=payload.zone_id,
+                ward_id=payload.ward_id,
                 total_lamp_installation_records=len(l_rows),
                 total_survey_records=len(p_rows),
                 processing_status="failed",
@@ -459,6 +487,7 @@ def generate_merged_report(
             customer_id=payload.customer_id,
             region_id=payload.region_id,
             zone_id=payload.zone_id,
+            ward_id=payload.ward_id,
             category="merged_reports",
             version=next_version,
             extension=".xlsx",
@@ -483,6 +512,7 @@ def generate_merged_report(
         customer_id=payload.customer_id,
         region_id=payload.region_id,
         zone_id=payload.zone_id,
+        ward_id=payload.ward_id,
         category="merged_previews",
         version=next_version,
         content=json.dumps(preview_payload, ensure_ascii=False).encode("utf-8"),
@@ -515,6 +545,7 @@ def generate_merged_report(
             customer_id=payload.customer_id,
             region_id=payload.region_id,
             zone_id=payload.zone_id,
+            ward_id=payload.ward_id,
             current_version=1,
             status="draft",
             generated_file_path=rel_xlsx_path,
@@ -559,6 +590,7 @@ def generate_merged_report(
             customer_id=payload.customer_id,
             region_id=payload.region_id,
             zone_id=payload.zone_id,
+            ward_id=payload.ward_id,
             total_lamp_installation_records=result.summary["total_lamp_installation_records"],
             total_survey_records=result.summary["total_survey_records"],
             total_led_records=result.summary["total_led_records"],
@@ -582,6 +614,7 @@ def generate_merged_report(
         entity_id=mr.id,
         details={
             "zone_id": payload.zone_id,
+            "ward_id": payload.ward_id,
             "version": next_version,
             "added_records": result.summary["added_records"],
             "existing_records": result.summary["existing_records"],
@@ -623,6 +656,7 @@ def list_merged_reports(
     customer_id: int | None = None,
     region_id: int | None = None,
     zone_id: int | None = None,
+    ward_id: int | None = None,
 ) -> list[MergedReportOut]:
     is_admin = auth.user.role == "admin"
     stmt = (
@@ -642,6 +676,8 @@ def list_merged_reports(
         stmt = stmt.where(MergedReport.region_id == region_id)
     if zone_id is not None:
         stmt = stmt.where(MergedReport.zone_id == zone_id)
+    if ward_id is not None:
+        stmt = stmt.where(MergedReport.ward_id == ward_id)
 
     if not is_admin:
         # Customers see only reports that have a published version
@@ -782,7 +818,7 @@ def publish_merged_report(
         action="merged_report.publish",
         entity_type="merged_report",
         entity_id=mr.id,
-        details={"version": mr.current_version, "zone_id": mr.zone_id},
+        details={"version": mr.current_version, "zone_id": mr.zone_id, "ward_id": mr.ward_id},
         ip_address=ip_address,
     )
     db.commit()
@@ -822,8 +858,10 @@ def download_merged_report(
 
     abs_path = storage_service.get_absolute_path(ver.generated_file_path)
     zone = db.get(Zone, mr.zone_id)
+    ward = db.get(Ward, mr.ward_id)
     safe_zone = (zone.zone_name if zone else f"zone_{mr.zone_id}").replace(" ", "_")
-    download_name = f"Merged_Report_{safe_zone}_v{ver.version}.xlsx"
+    safe_ward = (ward.ward_number if ward else f"ward_{mr.ward_id}").replace(" ", "_")
+    download_name = f"Merged_Report_{safe_zone}_{safe_ward}_v{ver.version}.xlsx"
 
     record_audit_log(
         db,

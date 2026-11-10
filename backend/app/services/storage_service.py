@@ -36,12 +36,23 @@ class StorageService:
         customer_id: int,
         region_id: int,
         zone_id: int,
+        ward_id: int,
         category: str,
         version: int,
         extension: str,
         content: bytes,
     ) -> str:
-        rel_dir = Path("customers") / str(customer_id) / "regions" / str(region_id) / "zones" / str(zone_id) / category
+        rel_dir = (
+            Path("customers")
+            / str(customer_id)
+            / "regions"
+            / str(region_id)
+            / "zones"
+            / str(zone_id)
+            / "wards"
+            / str(ward_id)
+            / category
+        )
         target_dir = self._resolve_relative(str(rel_dir))
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,6 +68,7 @@ class StorageService:
         customer_id: int,
         region_id: int,
         zone_id: int,
+        ward_id: int,
         category: str,
         version: int,
         content: bytes,
@@ -65,6 +77,7 @@ class StorageService:
             customer_id=customer_id,
             region_id=region_id,
             zone_id=zone_id,
+            ward_id=ward_id,
             category=category,
             version=version,
             extension=".json",
@@ -87,11 +100,22 @@ class StorageService:
         customer_id: int,
         region_id: int,
         zone_id: int,
+        ward_id: int,
         category: str,
         version: int,
         extension: str,
     ) -> tuple[str, int]:
-        rel_dir = Path("customers") / str(customer_id) / "regions" / str(region_id) / "zones" / str(zone_id) / category
+        rel_dir = (
+            Path("customers")
+            / str(customer_id)
+            / "regions"
+            / str(region_id)
+            / "zones"
+            / str(zone_id)
+            / "wards"
+            / str(ward_id)
+            / category
+        )
         target_dir = self._resolve_relative(str(rel_dir))
         target_dir.mkdir(parents=True, exist_ok=True)
 

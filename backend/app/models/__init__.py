@@ -4,7 +4,7 @@ from app.models.config_models import (
     ExternalLink,
     LedClassificationRule,
 )
-from app.models.hierarchy import Customer, Region, Zone
+from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.report import (
     MergedReport,
     MergedReportVersion,
@@ -29,6 +29,7 @@ __all__ = [
     "RevokedToken",
     "User",
     "UserCustomerPermission",
+    "Ward",
     "Zone",
 ]
 

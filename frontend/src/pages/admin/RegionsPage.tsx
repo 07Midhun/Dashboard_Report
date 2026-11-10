@@ -171,7 +171,8 @@ export function RegionsPage() {
                 <tr>
                   <th className="px-4 py-3 font-semibold">Region Name</th>
                   <th className="px-4 py-3 font-semibold">Customer</th>
-                  <th className="px-4 py-3 font-semibold text-center">Zones Count</th>
+                  <th className="px-4 py-3 font-semibold text-center">Zones</th>
+                  <th className="px-4 py-3 font-semibold text-center">Wards</th>
                   <th className="px-4 py-3 font-semibold text-center">Active Files</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold text-right">Actions</th>
@@ -211,6 +212,9 @@ export function RegionsPage() {
                     <td className="px-4 py-3 text-[#718096]">{reg.customer_name}</td>
                     <td className="px-4 py-3 text-center font-bold text-[#075D6B]">
                       {reg.zones_count}
+                    </td>
+                    <td className="px-4 py-3 text-center font-bold text-[#0D7780]">
+                      {reg.wards_count}
                     </td>
                     <td className="px-4 py-3 text-center font-semibold">{reg.report_files_count}</td>
                     <td className="px-4 py-3">

@@ -20,7 +20,14 @@ import { ReportUploadPanel } from "../../components/reports/ReportUploadPanel";
 
 export function SourceReportPage({ reportType }: { reportType: ReportType }) {
   const { user } = useAuth();
-  const { selection, selectedCustomer, selectedRegion, selectedZone, refreshTree } = useHierarchy();
+  const {
+    selection,
+    selectedCustomer,
+    selectedRegion,
+    selectedZone,
+    selectedWard,
+    refreshTree,
+  } = useHierarchy();
   const { showToast } = useToast();
 
   const isAdmin = user?.role === "admin";
@@ -51,12 +58,13 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
     loadReports();
   }, [loadReports]);
 
-  const activeZoneReport =
-    selection.zoneId != null
-      ? reports.find((r) => r.zone_id === selection.zoneId) ?? null
+  const activeWardReport =
+    selection.wardId != null
+      ? reports.find((r) => r.ward_id === selection.wardId) ?? null
       : null;
 
   const filteredReports = reports.filter((r) => {
+    if (selection.wardId) return r.ward_id === selection.wardId;
     if (selection.zoneId) return r.zone_id === selection.zoneId;
     if (selection.regionId) return r.region_id === selection.regionId;
     return true;
@@ -83,43 +91,47 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
         <h1 className="text-2xl font-bold text-[#173042]">{title}s</h1>
         <p className="mt-1 text-sm text-[#718096]">
           {isAdmin
-            ? `Upload, replace, preview, and manage zone-wise ${title} workbooks.`
-            : `Browse, search, preview, and download authorized ${title} workbooks.`}
+            ? `Upload, replace, preview, and manage ward-wise ${title} workbooks.`
+            : `Browse, search, preview, and download authorized ward-wise ${title} workbooks.`}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Region / Zone Hierarchy */}
+        {/* Left Region / Zone / Ward Hierarchy */}
         <div className="lg:col-span-4">
           <HierarchyExplorer />
         </div>
 
         {/* Right Workspace */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Admin Upload Panel */}
-          {isAdmin && (
-            selectedCustomer && selectedRegion && selectedZone ? (
+          {/* Admin Upload Panel (strictly requires Ward selection) */}
+          {isAdmin &&
+            (selectedCustomer && selectedRegion && selectedZone && selectedWard ? (
               <ReportUploadPanel
                 reportType={reportType}
                 customerId={selectedCustomer.id}
                 regionId={selectedRegion.id}
                 zoneId={selectedZone.id}
+                wardId={selectedWard.id}
                 zoneName={selectedZone.zone_name}
-                existingReport={activeZoneReport}
+                wardNumber={selectedWard.ward_number}
+                wardName={selectedWard.ward_name}
+                existingReport={activeWardReport}
                 onUploaded={async () => {
                   await Promise.all([loadReports(), refreshTree()]);
                 }}
               />
             ) : (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-[#718096]">
-                Select a <strong className="text-[#075D6B]">Zone</strong> from the hierarchy on the
-                left to upload or replace its {title}.
+                Expand a Region and Zone on the left and select a{" "}
+                <strong className="text-[#075D6B]">Ward</strong> (e.g.{" "}
+                <span className="font-mono font-semibold">W108</span>) to upload or replace its{" "}
+                {title}.
               </div>
-            )
-          )}
+            ))}
 
-          {/* Selected Zone Active Report Card */}
-          {selectedZone && activeZoneReport && (
+          {/* Selected Ward Active Report Card */}
+          {selectedWard && activeWardReport && (
             <div className="rounded-xl border border-teal-200 bg-white p-5 shadow-card">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -127,19 +139,22 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                     <FileSpreadsheet className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-[#075D6B] px-2 py-0.5 font-mono text-[11px] font-bold text-white">
+                        {selectedWard.ward_number}
+                      </span>
                       <h3 className="text-sm font-bold text-[#173042]">
-                        {activeZoneReport.original_filename}
+                        {activeWardReport.original_filename}
                       </h3>
                       <span className="rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-[11px] font-bold text-[#075D6B]">
-                        v{activeZoneReport.version}
+                        v{activeWardReport.version}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-[#718096]">
-                      Sheet: <strong>{activeZoneReport.sheet_name}</strong> •{" "}
-                      <strong>{activeZoneReport.row_count}</strong> rows •{" "}
-                      {formatBytes(activeZoneReport.file_size)} • Updated{" "}
-                      {formatDateTime(activeZoneReport.uploaded_at)}
+                      Sheet: <strong>{activeWardReport.sheet_name}</strong> •{" "}
+                      <strong>{activeWardReport.row_count}</strong> rows •{" "}
+                      {formatBytes(activeWardReport.file_size)} • Updated{" "}
+                      {formatDateTime(activeWardReport.uploaded_at)}
                     </p>
                   </div>
                 </div>
@@ -147,7 +162,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setPreviewTarget({ id: activeZoneReport.id })}
+                    onClick={() => setPreviewTarget({ id: activeWardReport.id })}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-[#173042] hover:bg-slate-50"
                   >
                     <Eye className="h-3.5 w-3.5 text-[#0D7780]" />
@@ -158,8 +173,8 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                     onClick={() =>
                       reportFilesApi.download(
                         reportType,
-                        activeZoneReport.id,
-                        activeZoneReport.original_filename
+                        activeWardReport.id,
+                        activeWardReport.original_filename
                       )
                     }
                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#075D6B] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0D7780]"
@@ -170,7 +185,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => setDeleteTarget(activeZoneReport)}
+                      onClick={() => setDeleteTarget(activeWardReport)}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -181,13 +196,13 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
               </div>
 
               {/* Version History (Admin) */}
-              {isAdmin && activeZoneReport.versions.length > 0 && (
+              {isAdmin && activeWardReport.versions.length > 0 && (
                 <div className="mt-4 border-t border-slate-100 pt-3">
                   <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#718096]">
-                    <History className="h-3.5 w-3.5" /> Version History
+                    <History className="h-3.5 w-3.5" /> Version History ({selectedWard.ward_number})
                   </p>
                   <div className="space-y-1.5">
-                    {activeZoneReport.versions.map((ver) => (
+                    {activeWardReport.versions.map((ver) => (
                       <div
                         key={ver.id}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs"
@@ -206,7 +221,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                           <button
                             type="button"
                             onClick={() =>
-                              setPreviewTarget({ id: activeZoneReport.id, version: ver.version })
+                              setPreviewTarget({ id: activeWardReport.id, version: ver.version })
                             }
                             className="text-xs font-semibold text-[#0D7780] hover:underline"
                           >
@@ -217,7 +232,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                             onClick={() =>
                               reportFilesApi.download(
                                 reportType,
-                                activeZoneReport.id,
+                                activeWardReport.id,
                                 ver.original_filename,
                                 ver.version
                               )
@@ -235,7 +250,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
             </div>
           )}
 
-          {/* List of Reports for selected Customer / Region / Zone */}
+          {/* List of Reports for selected Customer / Region / Zone / Ward */}
           <div className="rounded-xl border border-slate-200/80 bg-white shadow-card overflow-hidden">
             <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
               <h2 className="text-sm font-bold text-[#173042]">
@@ -254,7 +269,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                 <table className="min-w-full text-left text-xs">
                   <thead className="bg-slate-50 text-[#718096]">
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Region / Zone</th>
+                      <th className="px-4 py-3 font-semibold">Ward / Zone / Region</th>
                       <th className="px-4 py-3 font-semibold">Workbook</th>
                       <th className="px-4 py-3 font-semibold">Rows</th>
                       <th className="px-4 py-3 font-semibold">Ver</th>
@@ -266,8 +281,16 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
                     {filteredReports.map((rf) => (
                       <tr key={rf.id} className="hover:bg-slate-50/70">
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-[#173042]">{rf.zone_name}</p>
-                          <p className="text-[11px] text-[#718096]">{rf.region_name}</p>
+                          <p className="font-semibold text-[#173042]">
+                            <span className="mr-1.5 rounded bg-[#075D6B]/10 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#075D6B]">
+                              {rf.ward_number}
+                            </span>
+                            {rf.ward_name}
+                          </p>
+                          <p className="text-[11px] text-[#718096]">
+                            {rf.region_name} • {rf.zone_name}
+                            {rf.zone_code ? ` (${rf.zone_code})` : ""}
+                          </p>
                         </td>
                         <td className="px-4 py-3">
                           <p className="font-medium text-[#173042]">{rf.original_filename}</p>
@@ -319,7 +342,7 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
       <ConfirmModal
         open={deleteTarget !== null}
         title={`Delete ${title}?`}
-        message={`This will deactivate "${deleteTarget?.original_filename}" for zone "${deleteTarget?.zone_name}" and mark any generated Merged Report for this zone as outdated.`}
+        message={`This will deactivate "${deleteTarget?.original_filename}" for ward "${deleteTarget?.ward_number} (${deleteTarget?.ward_name})" and mark any generated Merged Report for this ward as outdated.`}
         confirmLabel="Delete File"
         danger
         loading={deleting}
@@ -329,4 +352,3 @@ export function SourceReportPage({ reportType }: { reportType: ReportType }) {
     </div>
   );
 }
-

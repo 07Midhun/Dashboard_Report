@@ -37,12 +37,26 @@ export function MainLayout() {
   const [externalLinks, setExternalLinks] = useState<ExternalLink[]>([]);
 
   useEffect(() => {
-    externalLinksApi
-      .list()
-      .then(setExternalLinks)
-      .catch(() => {
-        // Silently ignore if links endpoint is temporarily unavailable
-      });
+    const syncLinks = () => {
+      externalLinksApi
+        .list()
+        .then(setExternalLinks)
+        .catch(() => {
+          // Silently ignore if links endpoint is temporarily unavailable
+        });
+    };
+    syncLinks();
+
+    const onLinksUpdated = (e: Event) => {
+      const custom = e as CustomEvent<ExternalLink[]>;
+      if (Array.isArray(custom.detail)) {
+        setExternalLinks(custom.detail);
+      } else {
+        syncLinks();
+      }
+    };
+    window.addEventListener("schnell:external-links-updated", onLinksUpdated);
+    return () => window.removeEventListener("schnell:external-links-updated", onLinksUpdated);
   }, []);
 
   const isAdmin = user?.role === "admin";

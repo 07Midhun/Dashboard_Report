@@ -54,6 +54,7 @@ export function SettingsPage() {
         { link_key: "energy_saving_report", url: energyUrl.trim() || "" },
       ]);
       setLinks(updated);
+      window.dispatchEvent(new CustomEvent("schnell:external-links-updated", { detail: updated }));
       showToast(
         "success",
         "External URLs Updated",

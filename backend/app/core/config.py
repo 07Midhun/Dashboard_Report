@@ -46,14 +46,14 @@ class Settings(BaseModel):
 
     seed_default_data: bool = Field(default=True)
     seed_admin_name: str = Field(default="Schnell Administrator")
-    seed_admin_email: str = Field(default="admin@schnell.local")
-    seed_admin_username: str = Field(default="admin")
-    seed_admin_password: str = Field(default="ChangeMeAdmin123!")
+    seed_admin_email: str = Field(default="admin@gmail.com")
+    seed_admin_username: str = Field(default="admin@gmail.com")
+    seed_admin_password: str = Field(default="admin123")
 
     seed_customer_user_name: str = Field(default="BBMP Viewer")
-    seed_customer_user_email: str = Field(default="viewer@bbmp.local")
-    seed_customer_user_username: str = Field(default="bbmp_viewer")
-    seed_customer_user_password: str = Field(default="ChangeMeViewer123!")
+    seed_customer_user_email: str = Field(default="customer@gmail.com")
+    seed_customer_user_username: str = Field(default="customer@gmail.com")
+    seed_customer_user_password: str = Field(default="customer123")
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -110,13 +110,13 @@ def load_settings() -> Settings:
         cors_origins=cors_list,
         seed_default_data=os.getenv("SEED_DEFAULT_DATA", "true").lower() in {"1", "true", "yes"},
         seed_admin_name=os.getenv("SEED_ADMIN_NAME", "Schnell Administrator"),
-        seed_admin_email=os.getenv("SEED_ADMIN_EMAIL", "admin@schnell.local"),
-        seed_admin_username=os.getenv("SEED_ADMIN_USERNAME", "admin"),
-        seed_admin_password=os.getenv("SEED_ADMIN_PASSWORD", "ChangeMeAdmin123!"),
+        seed_admin_email=os.getenv("SEED_ADMIN_EMAIL", "admin@gmail.com"),
+        seed_admin_username=os.getenv("SEED_ADMIN_USERNAME", "admin@gmail.com"),
+        seed_admin_password=os.getenv("SEED_ADMIN_PASSWORD", "admin123"),
         seed_customer_user_name=os.getenv("SEED_CUSTOMER_USER_NAME", "BBMP Viewer"),
-        seed_customer_user_email=os.getenv("SEED_CUSTOMER_USER_EMAIL", "viewer@bbmp.local"),
-        seed_customer_user_username=os.getenv("SEED_CUSTOMER_USER_USERNAME", "bbmp_viewer"),
-        seed_customer_user_password=os.getenv("SEED_CUSTOMER_USER_PASSWORD", "ChangeMeViewer123!"),
+        seed_customer_user_email=os.getenv("SEED_CUSTOMER_USER_EMAIL", "customer@gmail.com"),
+        seed_customer_user_username=os.getenv("SEED_CUSTOMER_USER_USERNAME", "customer@gmail.com"),
+        seed_customer_user_password=os.getenv("SEED_CUSTOMER_USER_PASSWORD", "customer123"),
     )
 
 

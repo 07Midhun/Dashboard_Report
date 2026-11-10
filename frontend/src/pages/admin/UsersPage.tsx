@@ -242,7 +242,9 @@ export function UsersPage() {
                       <p className="font-semibold text-[#173042]">{u.name}</p>
                       <p className="text-[11px] text-[#718096]">
                         {u.email}
-                        {u.username ? ` • @${u.username}` : ""}
+                        {u.username && u.username.toLowerCase() !== u.email.toLowerCase()
+                          ? ` • ${u.username.includes("@") ? u.username : `@${u.username}`}`
+                          : ""}
                       </p>
                     </td>
                     <td className="px-4 py-3">

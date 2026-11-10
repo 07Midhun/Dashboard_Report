@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -55,18 +55,45 @@ def seed_initial_data(db: Session) -> None:
     if not settings.seed_default_data:
         return
 
-    # 1. Seed initial Admin account
-    admin = db.scalar(select(User).where(User.email == settings.seed_admin_email))
-    if admin is None:
-        admin = User(
-            name=settings.seed_admin_name,
-            email=settings.seed_admin_email,
-            username=settings.seed_admin_username,
-            password_hash=hash_password(settings.seed_admin_password),
-            role="admin",
-            status="active",
+    # 1. Seed initial Admin account (or migrate legacy starter seed account)
+    admin_email = settings.seed_admin_email.strip().lower()
+    admin_username = (
+        settings.seed_admin_username.strip().lower()
+        if settings.seed_admin_username and settings.seed_admin_username.strip()
+        else None
+    )
+    admin = db.scalar(
+        select(User).where(
+            or_(
+                func.lower(User.email) == admin_email,
+                func.lower(User.username) == admin_username if admin_username else False,
+            )
         )
-        db.add(admin)
+    )
+    if admin is None:
+        legacy_admin = db.scalar(
+            select(User).where(
+                func.lower(User.email) == "admin@schnell.local",
+                User.role == "admin",
+            )
+        )
+        if legacy_admin is not None:
+            legacy_admin.name = settings.seed_admin_name
+            legacy_admin.email = admin_email
+            legacy_admin.username = admin_username
+            legacy_admin.password_hash = hash_password(settings.seed_admin_password)
+            legacy_admin.status = "active"
+            admin = legacy_admin
+        else:
+            admin = User(
+                name=settings.seed_admin_name,
+                email=admin_email,
+                username=admin_username,
+                password_hash=hash_password(settings.seed_admin_password),
+                role="admin",
+                status="active",
+            )
+            db.add(admin)
         db.flush()
 
     # 2. Seed initial Customer, Regions, and Zones
@@ -102,18 +129,45 @@ def seed_initial_data(db: Session) -> None:
                 if zone is None:
                     db.add(Zone(region_id=region.id, zone_name=zone_name, status="active"))
 
-    # 3. Seed sample Customer user linked to Bangalore (BBMP)
-    customer_user = db.scalar(select(User).where(User.email == settings.seed_customer_user_email))
-    if customer_user is None:
-        customer_user = User(
-            name=settings.seed_customer_user_name,
-            email=settings.seed_customer_user_email,
-            username=settings.seed_customer_user_username,
-            password_hash=hash_password(settings.seed_customer_user_password),
-            role="customer",
-            status="active",
+    # 3. Seed sample Customer user linked to Bangalore (BBMP) (or migrate legacy starter seed account)
+    cust_email = settings.seed_customer_user_email.strip().lower()
+    cust_username = (
+        settings.seed_customer_user_username.strip().lower()
+        if settings.seed_customer_user_username and settings.seed_customer_user_username.strip()
+        else None
+    )
+    customer_user = db.scalar(
+        select(User).where(
+            or_(
+                func.lower(User.email) == cust_email,
+                func.lower(User.username) == cust_username if cust_username else False,
+            )
         )
-        db.add(customer_user)
+    )
+    if customer_user is None:
+        legacy_customer = db.scalar(
+            select(User).where(
+                func.lower(User.email) == "viewer@bbmp.local",
+                User.role == "customer",
+            )
+        )
+        if legacy_customer is not None:
+            legacy_customer.name = settings.seed_customer_user_name
+            legacy_customer.email = cust_email
+            legacy_customer.username = cust_username
+            legacy_customer.password_hash = hash_password(settings.seed_customer_user_password)
+            legacy_customer.status = "active"
+            customer_user = legacy_customer
+        else:
+            customer_user = User(
+                name=settings.seed_customer_user_name,
+                email=cust_email,
+                username=cust_username,
+                password_hash=hash_password(settings.seed_customer_user_password),
+                role="customer",
+                status="active",
+            )
+            db.add(customer_user)
         db.flush()
 
     if bbmp_customer is not None:

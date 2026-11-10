@@ -175,7 +175,7 @@ export function LoginPage() {
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder={
-                      loginType === "admin" ? "admin@schnell.local or admin" : "viewer@bbmp.local"
+                      loginType === "admin" ? "admin@gmail.com" : "customer@gmail.com"
                     }
                     autoComplete="username"
                     className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3.5 text-sm text-[#173042] placeholder:text-slate-400 focus:border-[#18A6A0] focus:outline-none focus:ring-2 focus:ring-[#18A6A0]/20"

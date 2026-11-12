@@ -20,7 +20,7 @@ export function SettingsPage() {
   const [matchType, setMatchType] = useState<"contains" | "exact" | "prefix" | "word" | "regex">(
     "contains"
   );
-  const [classification, setClassification] = useState<"led" | "non_led">("led");
+  const [classification, setClassification] = useState<"led" | "non_led" | "empty">("led");
 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
@@ -69,10 +69,11 @@ export function SettingsPage() {
 
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pattern.trim()) return;
+    const trimmed = pattern.trim();
+    if (!trimmed && classification !== "empty") return;
     try {
       await adminApi.createLedRule({
-        pattern: pattern.trim(),
+        pattern: trimmed || "(blank)",
         match_type: matchType,
         classification,
         is_active: true,
@@ -168,8 +169,9 @@ export function SettingsPage() {
           LED Lamp Classification Rules
         </div>
         <p className="text-xs text-[#718096]">
-          Add accepted LED naming variations or explicit non-LED exclusions (case-insensitive).
-          Unknown lamp types are flagged for review rather than guessed.
+          Add accepted LED naming variations, non-LED exclusions, or Empty placeholders such as hyphen (
+          <code className="font-mono text-[#173042]">-</code>) and blank cells (case-insensitive).
+          Empty data is excluded from merging without triggering Unknown lamp warnings.
         </p>
 
         <form onSubmit={handleAddRule} className="flex flex-wrap items-end gap-3">
@@ -179,7 +181,11 @@ export function SettingsPage() {
               type="text"
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
-              placeholder="e.g. LED 120W or Solar LED"
+              placeholder={
+                classification === "empty"
+                  ? "e.g. -, --, N/A (leave blank for empty cells)"
+                  : "e.g. LED 120W or Solar LED"
+              }
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-[#173042]"
             />
           </div>
@@ -201,16 +207,27 @@ export function SettingsPage() {
             <label className="mb-1 block text-xs font-semibold text-[#173042]">Classify As</label>
             <select
               value={classification}
-              onChange={(e) => setClassification(e.target.value as "led" | "non_led")}
+              onChange={(e) => {
+                const next = e.target.value as "led" | "non_led" | "empty";
+                setClassification(next);
+                if (
+                  next === "empty" &&
+                  matchType === "contains" &&
+                  (!pattern.trim() || pattern.trim() === "-")
+                ) {
+                  setMatchType("exact");
+                }
+              }}
               className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold"
             >
               <option value="led">Eligible LED</option>
               <option value="non_led">Non-LED (Exclude)</option>
+              <option value="empty">Empty</option>
             </select>
           </div>
           <button
             type="submit"
-            disabled={!pattern.trim()}
+            disabled={!pattern.trim() && classification !== "empty"}
             className="inline-flex items-center gap-1.5 rounded-xl bg-[#075D6B] px-4 py-2 text-xs font-bold text-white hover:bg-[#0D7780] disabled:opacity-50"
           >
             <Plus className="h-4 w-4" /> Add Rule
@@ -230,7 +247,25 @@ export function SettingsPage() {
             <tbody className="divide-y divide-slate-100">
               {rules.map((r) => (
                 <tr key={r.id}>
-                  <td className="px-4 py-2 font-mono font-semibold text-[#173042]">{r.pattern}</td>
+                  <td className="px-4 py-2 font-mono font-semibold text-[#173042]">
+                    {r.pattern === "(blank)" ? (
+                      <span>
+                        (blank){" "}
+                        <span className="ml-1 font-sans text-[11px] font-normal text-[#718096]">
+                          — blank / whitespace cells
+                        </span>
+                      </span>
+                    ) : r.pattern === "-" && r.classification === "empty" ? (
+                      <span>
+                        -{" "}
+                        <span className="ml-1 font-sans text-[11px] font-normal text-[#718096]">
+                          — hyphen placeholder
+                        </span>
+                      </span>
+                    ) : (
+                      r.pattern
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-[#718096]">{r.match_type}</td>
                   <td className="px-4 py-2">
                     <StatusBadge status={r.classification} />

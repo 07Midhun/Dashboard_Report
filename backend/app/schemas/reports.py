@@ -134,6 +134,7 @@ class ProcessingSummaryOut(BaseModel):
     duplicate_records: int
     invalid_records: int
     unknown_lamp_type_records: int
+    empty_records: int = 0
     non_led_records: int = 0
     final_merged_records: int
     processing_status: str
@@ -180,6 +181,7 @@ class MergedReportPreviewOut(BaseModel):
     duplicate_records: list[dict[str, Any]]
     invalid_records: list[dict[str, Any]]
     unknown_lamp_types: list[dict[str, Any]]
+    empty_records: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class RecentUploadItem(BaseModel):
@@ -261,6 +263,13 @@ class ZoneAvailabilityItem(BaseModel):
     error_wards_count: int = 0
 
 
+class RegionMergedLampsItem(BaseModel):
+    region_id: int
+    region_name: str
+    merged_lamps_count: int = 0
+    published_wards_count: int = 0
+
+
 class AdminDashboardOut(BaseModel):
     total_customers: int
     total_regions: int
@@ -275,6 +284,7 @@ class AdminDashboardOut(BaseModel):
     total_pole_survey_reports: int
     total_lamp_installation_reports: int
     total_merged_reports: int
+    merged_lamps_by_region: list[RegionMergedLampsItem] = Field(default_factory=list)
     recent_uploads: list[RecentUploadItem]
     recent_merged_reports: list[RecentMergedItem]
     latest_processing_activity: list[ProcessingActivityItem]

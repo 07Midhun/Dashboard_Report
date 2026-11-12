@@ -277,10 +277,37 @@ def update_led_rule(
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LED rule not found.")
 
+    target_class = payload.classification or rule.classification
+    next_pattern = rule.pattern
     if payload.pattern is not None:
-        rule.pattern = payload.pattern.strip()
-    if payload.match_type is not None:
-        rule.match_type = payload.match_type
+        stripped = payload.pattern.strip()
+        if not stripped:
+            if target_class == "empty":
+                next_pattern = "(blank)"
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Pattern must not be empty for LED or Non-LED rules.",
+                )
+        else:
+            next_pattern = stripped
+    next_match_type = payload.match_type or rule.match_type
+
+    dup = db.scalar(
+        select(LedClassificationRule).where(
+            LedClassificationRule.id != rule_id,
+            func.lower(LedClassificationRule.pattern) == next_pattern.lower(),
+            LedClassificationRule.match_type == next_match_type,
+        )
+    )
+    if dup is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A classification rule with this pattern and match type already exists.",
+        )
+
+    rule.pattern = next_pattern
+    rule.match_type = next_match_type
     if payload.classification is not None:
         rule.classification = payload.classification
     if payload.is_active is not None:

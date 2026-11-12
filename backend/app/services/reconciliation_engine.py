@@ -37,6 +37,7 @@ class ReconciliationResult:
     duplicate_records: list[dict[str, Any]]
     invalid_records: list[dict[str, Any]]
     unknown_lamp_types: list[dict[str, Any]]
+    empty_records: list[dict[str, Any]]
     non_led_records: list[dict[str, Any]]
     warnings: list[str]
 
@@ -57,7 +58,7 @@ def reconcile_reports(
     L-Number Generation Rule:
     1. Read Pole Survey records in original order.
     2. Exclude invalid/blank Pole Numbers.
-    3. Filter eligible LED records using LedClassifier (excluding non-LED & flagging unknown).
+    3. Filter eligible LED records using LedClassifier (excluding non-LED & empty, flagging unknown).
     4. Deduplicate Pole Survey LED records by normalized Pole Number, retaining first occurrence.
     5. Assign sequential L-numbers (L1, L2, L3, ...) to those unique eligible LED records.
     6. Compare against existing Lamp Installation poles:
@@ -113,6 +114,7 @@ def reconcile_reports(
     # Step 2-4: Process Pole Survey rows in exact original order
     invalid_records: list[dict[str, Any]] = []
     unknown_lamp_types: list[dict[str, Any]] = []
+    empty_records: list[dict[str, Any]] = []
     non_led_records: list[dict[str, Any]] = []
     duplicate_records: list[dict[str, Any]] = []
     eligible_unique_leds: list[EligibleSurveyRecord] = []
@@ -152,6 +154,19 @@ def reconcile_reports(
                     "arm_count": disp_arm,
                     "lamp_type": disp_lamp,
                     "matched_rule": matched_rule,
+                }
+            )
+            continue
+
+        if classification == "empty":
+            empty_records.append(
+                {
+                    "excel_row": excel_row,
+                    "pole_number": disp_pole,
+                    "arm_count": disp_arm,
+                    "lamp_type": disp_lamp or "(blank)",
+                    "matched_rule": matched_rule,
+                    "reason": "Classified as Empty (hyphen/blank/empty rule)",
                 }
             )
             continue
@@ -259,6 +274,7 @@ def reconcile_reports(
         "duplicate_records": len(duplicate_records),
         "invalid_records": len(invalid_records),
         "unknown_lamp_type_records": len(unknown_lamp_types),
+        "empty_records": len(empty_records),
         "non_led_records": len(non_led_records),
         "final_merged_records": len(lamp_rows) + len(newly_added_records),
     }
@@ -271,6 +287,7 @@ def reconcile_reports(
         duplicate_records=duplicate_records,
         invalid_records=invalid_records,
         unknown_lamp_types=unknown_lamp_types,
+        empty_records=empty_records,
         non_led_records=non_led_records,
         warnings=warnings,
     )

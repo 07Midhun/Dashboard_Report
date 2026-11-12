@@ -116,6 +116,19 @@ def write_merged_workbook(
                 ws.insert_rows(insert_start_row, amount=rows_to_add)
 
             template_height = ws.row_dimensions[template_row].height if has_data_template_row else None
+            # Cache template StyleArrays once per merge so appending thousands of rows
+            # does not repeat 5-property StyleProxy deepcopy calls on every cell.
+            template_styles = (
+                [
+                    copy(src_cell._style) if src_cell.has_style else None
+                    for src_cell in (
+                        ws.cell(row=template_row, column=col_idx)
+                        for col_idx in range(1, num_cols + 1)
+                    )
+                ]
+                if has_data_template_row
+                else []
+            )
 
             for idx, record in enumerate(newly_added_records):
                 target_row = insert_start_row + idx
@@ -123,20 +136,19 @@ def write_merged_workbook(
                     ws.row_dimensions[target_row].height = template_height
 
                 raw_values = record.get("_raw_mapped_values", {})
+                row_values_by_col = {
+                    col_idx: raw_values[col_name]
+                    for col_name, col_idx in header_col_map.items()
+                    if col_name in raw_values
+                }
 
                 for col_idx in range(1, num_cols + 1):
-                    src_cell = ws.cell(row=template_row, column=col_idx)
                     dst_cell = ws.cell(row=target_row, column=col_idx)
                     if has_data_template_row:
-                        _copy_cell_style(src_cell, dst_cell)
-                    dst_cell.value = None
-
-                # Populate ONLY explicitly mapped columns (including Pole Number cell with P004-L4)
-                for col_name, col_idx in header_col_map.items():
-                    if col_name in raw_values:
-                        dst_cell = ws.cell(row=target_row, column=col_idx)
-                        val = raw_values[col_name]
-                        dst_cell.value = val
+                        src_style = template_styles[col_idx - 1]
+                        if src_style is not None:
+                            dst_cell._style = copy(src_style)
+                    dst_cell.value = row_values_by_col.get(col_idx)
 
             # Extend auto-filter range if an auto-filter was attached to the data block
             if ws.auto_filter and ws.auto_filter.ref:

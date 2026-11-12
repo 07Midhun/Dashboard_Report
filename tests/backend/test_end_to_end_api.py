@@ -350,3 +350,196 @@ def test_case_9_10_12_full_workflow_ward_isolation_stale_and_customer_rbac(clien
     assert mr_b_detail["status"] == "draft"
     assert mr_b_detail["is_outdated"] is False
 
+
+def _region_lamps_map(dash_json: dict) -> dict[str, int]:
+    return {
+        item["region_name"]: item["merged_lamps_count"]
+        for item in dash_json.get("merged_lamps_by_region", [])
+    }
+
+
+def test_admin_dashboard_region_merged_lamps_published_only_and_no_double_count(client, admin_headers):
+    tree = client.get("/api/hierarchy/tree", headers=admin_headers).json()
+    bbmp = next(c for c in tree if c["customer_name"] == "Bangalore (BBMP)")
+    east_reg = next(r for r in bbmp["regions"] if r["region_name"] == "EAST")
+    bomm_reg = next(r for r in bbmp["regions"] if r["region_name"] == "BOMMANAHALLI")
+
+    hebbal_zone = next(z for z in east_reg["zones"] if z["zone_name"] == "Hebbal")
+    hebbal_ward = hebbal_zone["wards"][0]
+    bmh_zone = bomm_reg["zones"][0]
+    bmh_ward = bmh_zone["wards"][0]
+
+    base_dash = client.get(
+        "/api/dashboard/admin",
+        params={"customer_id": bbmp["id"]},
+        headers=admin_headers,
+    )
+    assert base_dash.status_code == 200
+    base_counts = _region_lamps_map(base_dash.json())
+    base_east = base_counts["EAST"]
+    base_bomm = base_counts["BOMMANAHALLI"]
+
+    # 1. Draft Merged Report in EAST (Hebbal W61) must NOT be counted until published
+    east_lamp_v1 = _make_xlsx_bytes(
+        ["Pole Number", "Arm Count", "Lamp Type"],
+        [["E001", 1, "LED 60W"], ["E002", 1, "LED 60W"]],
+    )
+    east_survey_v1 = _make_xlsx_bytes(
+        ["Pole No", "Arms", "Lamp Type"],
+        [["E001", 1, "LED 60W"], ["E003", 1, "LED 60W"], ["E003", 1, "LED 60W"]],
+    )
+    assert (
+        client.post(
+            "/api/lamp-installation/upload",
+            data={"customer_id": bbmp["id"], "region_id": east_reg["id"], "zone_id": hebbal_zone["id"], "ward_id": hebbal_ward["id"]},
+            files={"file": ("hebbal_lamp.xlsx", east_lamp_v1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=admin_headers,
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            "/api/pole-survey/upload",
+            data={"customer_id": bbmp["id"], "region_id": east_reg["id"], "zone_id": hebbal_zone["id"], "ward_id": hebbal_ward["id"]},
+            files={"file": ("hebbal_survey.xlsx", east_survey_v1, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=admin_headers,
+        ).status_code
+        == 201
+    )
+    gen_e_v1 = client.post(
+        "/api/merged-reports/generate",
+        json={
+            "customer_id": bbmp["id"],
+            "region_id": east_reg["id"],
+            "zone_id": hebbal_zone["id"],
+            "ward_id": hebbal_ward["id"],
+            "pole_survey_mapping": {"pole_number_col": "Pole No", "arm_count_col": "Arms", "lamp_type_col": "Lamp Type"},
+            "lamp_installation_mapping": {"pole_number_col": "Pole Number", "arm_count_col": "Arm Count", "lamp_type_col": "Lamp Type"},
+        },
+        headers=admin_headers,
+    )
+    assert gen_e_v1.status_code == 201
+    assert gen_e_v1.json()["summary"]["final_merged_records"] == 3
+    east_mr_id = gen_e_v1.json()["merged_report"]["id"]
+
+    still_draft_counts = _region_lamps_map(
+        client.get("/api/dashboard/admin", params={"customer_id": bbmp["id"]}, headers=admin_headers).json()
+    )
+    assert still_draft_counts["EAST"] == base_east
+    assert still_draft_counts["BOMMANAHALLI"] == base_bomm
+
+    # 2. Publish EAST v1 -> EAST increments by +3, BOMMANAHALLI stays at base
+    assert client.post(f"/api/merged-reports/{east_mr_id}/publish", headers=admin_headers).status_code == 200
+    pub_v1_counts = _region_lamps_map(
+        client.get("/api/dashboard/admin", params={"customer_id": bbmp["id"]}, headers=admin_headers).json()
+    )
+    assert pub_v1_counts["EAST"] == base_east + 3
+    assert pub_v1_counts["BOMMANAHALLI"] == base_bomm
+
+    # 3. Upload v2 survey & generate v2 DRAFT -> published count remains +3 until v2 is published
+    east_survey_v2 = _make_xlsx_bytes(
+        ["Pole No", "Arms", "Lamp Type"],
+        [["E001", 1, "LED 60W"], ["E003", 1, "LED 60W"], ["E004", 1, "LED 90W"]],
+    )
+    assert (
+        client.post(
+            "/api/pole-survey/upload",
+            data={
+                "customer_id": bbmp["id"],
+                "region_id": east_reg["id"],
+                "zone_id": hebbal_zone["id"],
+                "ward_id": hebbal_ward["id"],
+                "replace_existing": "true",
+            },
+            files={"file": ("hebbal_survey_v2.xlsx", east_survey_v2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=admin_headers,
+        ).status_code
+        == 201
+    )
+    gen_e_v2 = client.post(
+        "/api/merged-reports/generate",
+        json={
+            "customer_id": bbmp["id"],
+            "region_id": east_reg["id"],
+            "zone_id": hebbal_zone["id"],
+            "ward_id": hebbal_ward["id"],
+            "pole_survey_mapping": {"pole_number_col": "Pole No", "arm_count_col": "Arms", "lamp_type_col": "Lamp Type"},
+            "lamp_installation_mapping": {"pole_number_col": "Pole Number", "arm_count_col": "Arm Count", "lamp_type_col": "Lamp Type"},
+        },
+        headers=admin_headers,
+    )
+    assert gen_e_v2.status_code == 201
+    assert gen_e_v2.json()["summary"]["final_merged_records"] == 4
+
+    v2_draft_counts = _region_lamps_map(
+        client.get("/api/dashboard/admin", params={"customer_id": bbmp["id"]}, headers=admin_headers).json()
+    )
+    assert v2_draft_counts["EAST"] == base_east + 3
+
+    # 4. Publish EAST v2 -> updates cleanly from +3 to +4 (never double-counting v1 + v2)
+    assert client.post(f"/api/merged-reports/{east_mr_id}/publish", headers=admin_headers).status_code == 200
+    v2_pub_counts = _region_lamps_map(
+        client.get("/api/dashboard/admin", params={"customer_id": bbmp["id"]}, headers=admin_headers).json()
+    )
+    assert v2_pub_counts["EAST"] == base_east + 4
+
+    # 5. Upload, generate, and publish BOMMANAHALLI (W202) -> +5 independently (3 existing + 2 added)
+    bmh_lamp = _make_xlsx_bytes(
+        ["Pole Number", "Arm Count", "Lamp Type"],
+        [["B001", 1, "LED 60W"], ["B002", 1, "LED 60W"], ["B003", 2, "LED 90W"]],
+    )
+    bmh_survey = _make_xlsx_bytes(
+        ["Pole No", "Arms", "Lamp Type"],
+        [["B001", 1, "LED 60W"], ["B004", 1, "LED 60W"], ["B005", 1, "LED 40W"], ["B005", 1, "LED 40W"]],
+    )
+    assert (
+        client.post(
+            "/api/lamp-installation/upload",
+            data={"customer_id": bbmp["id"], "region_id": bomm_reg["id"], "zone_id": bmh_zone["id"], "ward_id": bmh_ward["id"]},
+            files={"file": ("bmh_lamp.xlsx", bmh_lamp, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=admin_headers,
+        ).status_code
+        == 201
+    )
+    assert (
+        client.post(
+            "/api/pole-survey/upload",
+            data={"customer_id": bbmp["id"], "region_id": bomm_reg["id"], "zone_id": bmh_zone["id"], "ward_id": bmh_ward["id"]},
+            files={"file": ("bmh_survey.xlsx", bmh_survey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=admin_headers,
+        ).status_code
+        == 201
+    )
+    gen_bmh = client.post(
+        "/api/merged-reports/generate",
+        json={
+            "customer_id": bbmp["id"],
+            "region_id": bomm_reg["id"],
+            "zone_id": bmh_zone["id"],
+            "ward_id": bmh_ward["id"],
+            "pole_survey_mapping": {"pole_number_col": "Pole No", "arm_count_col": "Arms", "lamp_type_col": "Lamp Type"},
+            "lamp_installation_mapping": {"pole_number_col": "Pole Number", "arm_count_col": "Arm Count", "lamp_type_col": "Lamp Type"},
+        },
+        headers=admin_headers,
+    )
+    assert gen_bmh.status_code == 201
+    assert gen_bmh.json()["summary"]["final_merged_records"] == 5
+    bmh_mr_id = gen_bmh.json()["merged_report"]["id"]
+    assert client.post(f"/api/merged-reports/{bmh_mr_id}/publish", headers=admin_headers).status_code == 200
+
+    final_counts = _region_lamps_map(
+        client.get("/api/dashboard/admin", params={"customer_id": bbmp["id"]}, headers=admin_headers).json()
+    )
+    assert final_counts["EAST"] == base_east + 4
+    assert final_counts["BOMMANAHALLI"] == base_bomm + 5
+
+    # 6. Filtering by Bommanahalli region scopes regional totals accurately
+    filtered_bmh = _region_lamps_map(
+        client.get(
+            "/api/dashboard/admin",
+            params={"customer_id": bbmp["id"], "region_id": bomm_reg["id"]},
+            headers=admin_headers,
+        ).json()
+    )
+    assert filtered_bmh == {"BOMMANAHALLI": base_bomm + 5}
+

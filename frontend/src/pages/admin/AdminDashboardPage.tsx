@@ -92,6 +92,18 @@ export function AdminDashboardPage() {
 
   const hasFilters = customerFilter !== "" || regionFilter !== "" || zoneFilter !== "";
 
+  const regionLampItems = data?.merged_lamps_by_region ?? [];
+  const bommanahalliLamps = regionLampItems
+    .filter((r) => r.region_name.trim().toLowerCase().includes("bommanahal"))
+    .reduce((sum, r) => sum + r.merged_lamps_count, 0);
+  const eastLamps = regionLampItems
+    .filter((r) => /\beast\b/.test(r.region_name.trim().toLowerCase()))
+    .reduce((sum, r) => sum + r.merged_lamps_count, 0);
+  const publishedLampWards = regionLampItems.reduce(
+    (sum, r) => sum + r.published_wards_count,
+    0
+  );
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -239,14 +251,72 @@ export function AdminDashboardPage() {
               accent="slate"
               onClick={() => navigate("/pole-survey")}
             />
-            <StatCard
-              title="Wards w/ Processing Errors"
-              value={data.wards_with_processing_errors}
-              subtitle="Wards whose latest merge run failed"
-              icon={AlertTriangle}
-              accent="slate"
+            <div
               onClick={() => navigate("/merged-reports")}
-            />
+              className="group cursor-pointer rounded-xl border border-slate-200/80 bg-white p-5 shadow-card transition-all duration-150 hover:-translate-y-0.5 hover:border-[#18A6A0]/60 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#718096]">
+                    Total Merged Lamps
+                  </p>
+                </div>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#18A6A0]/15 text-[#075D6B]">
+                  <Lightbulb className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="mt-2 overflow-hidden rounded-lg border border-slate-200/80">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-[#718096]">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left">Region</th>
+                      <th className="px-3 py-1.5 text-right">Total Lamps</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    <tr className="bg-teal-50/25">
+                      <td className="px-3 py-1.5 font-semibold text-[#173042]">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[#075D6B]" />
+                          Bommanahalli
+                        </span>
+                      </td>
+                      <td
+                        className={`px-3 py-1.5 text-right text-base font-bold tabular-nums text-[#075D6B] ${
+                          loading ? "opacity-60" : ""
+                        }`}
+                      >
+                        {bommanahalliLamps.toLocaleString()}
+                      </td>
+                    </tr>
+                    <tr className="bg-emerald-50/25">
+                      <td className="px-3 py-1.5 font-semibold text-[#173042]">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[#18A6A0]" />
+                          East
+                        </span>
+                      </td>
+                      <td
+                        className={`px-3 py-1.5 text-right text-base font-bold tabular-nums text-[#0D7780] ${
+                          loading ? "opacity-60" : ""
+                        }`}
+                      >
+                        {eastLamps.toLocaleString()}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="mt-2 text-xs text-[#718096]">
+                {loading
+                  ? "Refreshing published counts..."
+                  : publishedLampWards === 0
+                  ? "No published merged reports in current scope"
+                  : `Across ${publishedLampWards} published ward(s)`}
+              </p>
+            </div>
           </div>
 
           {/* Quick Actions */}

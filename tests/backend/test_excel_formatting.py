@@ -183,3 +183,67 @@ def test_case_11_preserves_original_excel_formatting_and_writes_in_same_pole_cel
     finally:
         out_wb.close()
 
+
+def test_large_batch_cached_style_copy_preserves_independent_row_styles(tmp_path: Path):
+    master_path = tmp_path / "lamp_master_large.xlsx"
+    merged_path = tmp_path / "merged_large.xlsx"
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Lamp Report"
+    headers = ["Pole Number", "Arm Count", "Lamp Type", "Notes"]
+    for c_idx, text in enumerate(headers, start=1):
+        ws.cell(row=1, column=c_idx, value=text)
+
+    ws.row_dimensions[2].height = 20
+    ws["A2"] = "P001"
+    ws["A2"].font = Font(name="Segoe UI", size=10, bold=True)
+    ws["B2"] = 1
+    ws["B2"].number_format = "0"
+    ws["C2"] = "LED 60W"
+    ws["C2"].fill = PatternFill("solid", fgColor="F9FBFB")
+    # Column D intentionally has no custom style on template row
+    ws["D2"] = "Existing note"
+    wb.save(master_path)
+    wb.close()
+
+    records = [
+        {
+            "generated_pole_number": f"P{100 + i}-L{i}",
+            "_raw_mapped_values": {
+                "Pole Number": f"P{100 + i}-L{i}",
+                "Arm Count": 2,
+                "Lamp Type": "LED 90W",
+            },
+        }
+        for i in range(1, 151)
+    ]
+
+    write_merged_workbook(
+        master_path=master_path,
+        output_path=merged_path,
+        sheet_name="Lamp Report",
+        header_row_index=1,
+        header_col_map={h: idx for idx, h in enumerate(headers, start=1)},
+        last_data_row_index=2,
+        has_footer_rows=False,
+        newly_added_records=records,
+    )
+
+    out_wb = openpyxl.load_workbook(merged_path, data_only=False)
+    try:
+        out_ws = out_wb["Lamp Report"]
+        assert out_ws["A3"].value == "P101-L1"
+        assert out_ws["A152"].value == "P250-L150"
+        assert out_ws["D3"].value is None
+        assert out_ws["A3"]._style is not out_ws["A4"]._style
+        assert out_ws["A152"].font.name == "Segoe UI"
+        assert out_ws["A152"].font.bold is True
+        assert out_ws["B152"].number_format == "0"
+        assert out_ws["C152"].fill.fgColor.rgb.endswith("F9FBFB")
+        assert out_ws["D152"].has_style is False
+        assert out_ws.row_dimensions[152].height == 20
+    finally:
+        out_wb.close()
+
+

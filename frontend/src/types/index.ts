@@ -241,6 +241,7 @@ export interface ProcessingSummary {
   duplicate_records: number;
   invalid_records: number;
   unknown_lamp_type_records: number;
+  empty_records?: number;
   non_led_records: number;
   final_merged_records: number;
   processing_status: string;
@@ -301,6 +302,7 @@ export interface MergedReportPreview {
   duplicate_records: Record<string, any>[];
   invalid_records: Record<string, any>[];
   unknown_lamp_types: Record<string, any>[];
+  empty_records?: Record<string, any>[];
 }
 
 export interface RegionAvailabilityItem {
@@ -335,6 +337,13 @@ export interface ZoneAvailabilityItem {
   error_wards_count: number;
 }
 
+export interface RegionMergedLampsItem {
+  region_id: number;
+  region_name: string;
+  merged_lamps_count: number;
+  published_wards_count: number;
+}
+
 export interface AdminDashboardData {
   total_customers: number;
   total_regions: number;
@@ -349,6 +358,7 @@ export interface AdminDashboardData {
   total_pole_survey_reports: number;
   total_lamp_installation_reports: number;
   total_merged_reports: number;
+  merged_lamps_by_region?: RegionMergedLampsItem[];
   recent_uploads: {
     id: number;
     report_type: string;
@@ -451,7 +461,7 @@ export interface LedRule {
   id: number;
   pattern: string;
   match_type: "exact" | "prefix" | "contains" | "word" | "regex";
-  classification: "led" | "non_led";
+  classification: "led" | "non_led" | "empty";
   is_active: boolean;
   created_at: string;
 }

@@ -41,7 +41,7 @@ class LedClassificationRule(Base):
     match_type: Mapped[str] = mapped_column(
         String(32), nullable=False, default="contains"
     )  # exact | prefix | contains | regex
-    classification: Mapped[str] = mapped_column(String(32), nullable=False)  # led | non_led
+    classification: Mapped[str] = mapped_column(String(32), nullable=False)  # led | non_led | empty
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

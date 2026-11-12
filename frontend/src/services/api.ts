@@ -4,6 +4,7 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:8000/api";
 
 export const TOKEN_STORAGE_KEY = "schnell_access_token";
+export const MERGE_REQUEST_TIMEOUT_MS = 600000;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -51,7 +52,10 @@ export async function downloadAuthorizedFile(
   endpointPath: string,
   fallbackFilename: string
 ): Promise<void> {
-  const response = await api.get(endpointPath, { responseType: "blob" });
+  const response = await api.get(endpointPath, {
+    responseType: "blob",
+    timeout: MERGE_REQUEST_TIMEOUT_MS,
+  });
   const disposition = response.headers["content-disposition"] as string | undefined;
   let filename = fallbackFilename;
   if (disposition) {

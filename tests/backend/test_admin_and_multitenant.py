@@ -423,8 +423,13 @@ def test_led_rules_external_links_upload_history_dashboards_audit_and_file_valid
 ):
     bbmp_id, east_id, zone_id, ward_id = _get_bbmp_east(client, admin_headers)
 
-    # LED rules CRUD + RBAC
+    # LED rules CRUD + RBAC (including Empty rules for hyphen '-' & blank data)
     assert client.get("/api/led-rules", headers=customer_headers).status_code == 403
+    seeded_rules = client.get("/api/led-rules", headers=admin_headers)
+    assert seeded_rules.status_code == 200
+    assert any(r["pattern"] == "-" and r["classification"] == "empty" for r in seeded_rules.json())
+    assert any(r["pattern"] == "(blank)" and r["classification"] == "empty" for r in seeded_rules.json())
+
     create_rule = client.post(
         "/api/led-rules",
         json={"pattern": "SOLAR HYBRID", "match_type": "contains", "classification": "led", "is_active": True},
@@ -433,7 +438,52 @@ def test_led_rules_external_links_upload_history_dashboards_audit_and_file_valid
     assert create_rule.status_code == 201
     rule_id = create_rule.json()["id"]
     assert client.put(f"/api/led-rules/{rule_id}", json={"is_active": False}, headers=admin_headers).status_code == 200
+    assert client.put(f"/api/led-rules/{rule_id}", json={"pattern": "   "}, headers=admin_headers).status_code == 400
     assert client.delete(f"/api/led-rules/{rule_id}", headers=admin_headers).status_code == 200
+
+    # Blank pattern is rejected for led/non_led (422) but normalized to '(blank)' for empty
+    assert (
+        client.post(
+            "/api/led-rules",
+            json={"pattern": "   ", "match_type": "exact", "classification": "led", "is_active": True},
+            headers=admin_headers,
+        ).status_code
+        == 422
+    )
+    empty_rule = client.post(
+        "/api/led-rules",
+        json={"pattern": "--", "match_type": "contains", "classification": "empty", "is_active": True},
+        headers=admin_headers,
+    )
+    assert empty_rule.status_code == 201
+    assert empty_rule.json()["classification"] == "empty"
+    empty_rule_id = empty_rule.json()["id"]
+    upd_empty = client.put(
+        f"/api/led-rules/{empty_rule_id}",
+        json={"pattern": ""},
+        headers=admin_headers,
+    )
+    assert upd_empty.status_code == 200
+    assert upd_empty.json()["pattern"] == "(blank)"
+    # Duplicate update against seeded ('(blank)', 'exact') returns 409 Conflict
+    assert (
+        client.put(
+            f"/api/led-rules/{empty_rule_id}",
+            json={"match_type": "exact"},
+            headers=admin_headers,
+        ).status_code
+        == 409
+    )
+    assert client.delete(f"/api/led-rules/{empty_rule_id}", headers=admin_headers).status_code == 200
+
+    blank_create = client.post(
+        "/api/led-rules",
+        json={"pattern": "", "match_type": "contains", "classification": "empty", "is_active": True},
+        headers=admin_headers,
+    )
+    assert blank_create.status_code == 201
+    assert blank_create.json()["pattern"] == "(blank)"
+    assert client.delete(f"/api/led-rules/{blank_create.json()['id']}", headers=admin_headers).status_code == 200
 
     # External Links GET (both roles) + PUT (admin only)
     assert client.get("/api/external-links", headers=customer_headers).status_code == 200
@@ -516,7 +566,10 @@ def test_led_rules_external_links_upload_history_dashboards_audit_and_file_valid
 
     # Trigger a processing failure in an isolated BBMP ward to verify wards_with_processing_errors increments then clears on success
     err_ward_id = client.get(f"/api/wards?zone_id={zone_id}", headers=admin_headers).json()[-1]["id"]
-    bad_map_survey = _make_xlsx_bytes(["Pole No", "Arms", "Lamp Type"], [["ERR1", 1, "LED 60W"]])
+    bad_map_survey = _make_xlsx_bytes(
+        ["Pole No", "Arms", "Lamp Type"],
+        [["ERR1", 1, "LED 60W"], ["ERR2", 1, "-"], ["ERR3", 1, ""]],
+    )
     bad_map_lamp = _make_xlsx_bytes(["Pole Number", "Arm Count", "Lamp Type"], [["ERR0", 1, "LED 60W"]])
     assert (
         client.post(
@@ -570,6 +623,14 @@ def test_led_rules_external_links_upload_history_dashboards_audit_and_file_valid
         headers=admin_headers,
     )
     assert ok_gen.status_code == 201
+    ok_body = ok_gen.json()
+    assert ok_body["summary"]["empty_records"] == 2
+    assert ok_body["summary"]["unknown_lamp_type_records"] == 0
+    assert [r["pole_number"] for r in ok_body["empty_records"]] == ["ERR2", "ERR3"]
+    err_preview = client.get(f"/api/merged-reports/{ok_body['merged_report']['id']}/preview", headers=admin_headers)
+    assert err_preview.status_code == 200
+    assert err_preview.json()["summary"]["empty_records"] == 2
+    assert [r["pole_number"] for r in err_preview.json()["empty_records"]] == ["ERR2", "ERR3"]
     recovered_dash = client.get(
         "/api/dashboard/admin",
         params={"customer_id": bbmp_id, "region_id": east_id, "zone_id": zone_id},

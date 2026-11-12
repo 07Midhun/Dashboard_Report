@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import AuthContext, verify_customer_access
 from app.models.hierarchy import Customer, Region, Ward, Zone
-from app.models.report import MergedReport, ProcessingLog, ReportFile
+from app.models.report import MergedReport, MergedReportVersion, ProcessingLog, ReportFile
 from app.models.user import User
 from app.schemas.reports import (
     AdminDashboardOut,
@@ -13,6 +13,7 @@ from app.schemas.reports import (
     RecentMergedItem,
     RecentUploadItem,
     RegionAvailabilityItem,
+    RegionMergedLampsItem,
     ZoneAvailabilityItem,
 )
 
@@ -270,6 +271,9 @@ def get_admin_dashboard(
     draft_or_outdated_ward_ids: set[int] = set()
     error_ward_ids: set[int] = set()
     total_merged_count = 0
+    merged_lamps_by_region_id: dict[int, int] = {r.id: 0 for r in regions}
+    published_wards_by_region_id: dict[int, int] = {r.id: 0 for r in regions}
+    ward_region_map = {w.id: w.zone.region_id for w in wards if w.zone is not None}
 
     if ward_ids:
         rf_rows = db.execute(
@@ -286,6 +290,7 @@ def get_admin_dashboard(
 
         mr_rows = db.execute(
             select(
+                MergedReport.id,
                 MergedReport.ward_id,
                 MergedReport.status,
                 MergedReport.published_at,
@@ -293,13 +298,71 @@ def get_admin_dashboard(
             ).where(MergedReport.ward_id.in_(ward_ids))
         ).all()
         total_merged_count = len(mr_rows)
-        for wid, mstatus, pub_at, gen_path in mr_rows:
+        published_mr_ward_map: dict[int, int] = {}
+        for mr_id, wid, mstatus, pub_at, gen_path in mr_rows:
             if gen_path and mstatus in {"draft", "published", "outdated"}:
                 completed_merged_ward_ids.add(wid)
             if pub_at is not None:
                 published_merged_ward_ids.add(wid)
+                published_mr_ward_map[mr_id] = wid
             elif mstatus in {"draft", "outdated"}:
                 draft_or_outdated_ward_ids.add(wid)
+
+        # Aggregate final_merged_records once per ward from its latest published MergedReportVersion
+        if published_mr_ward_map:
+            pub_versions = db.scalars(
+                select(MergedReportVersion)
+                .where(
+                    MergedReportVersion.merged_report_id.in_(list(published_mr_ward_map.keys())),
+                    MergedReportVersion.status == "published",
+                    MergedReportVersion.generated_file_path.is_not(None),
+                )
+                .order_by(MergedReportVersion.version.desc(), MergedReportVersion.id.desc())
+            ).all()
+
+            latest_pub_ver_by_ward: dict[int, MergedReportVersion] = {}
+            for ver in pub_versions:
+                wid = published_mr_ward_map.get(ver.merged_report_id)
+                if wid is not None and wid not in latest_pub_ver_by_ward:
+                    latest_pub_ver_by_ward[wid] = ver
+
+            ver_ids = [ver.id for ver in latest_pub_ver_by_ward.values()]
+            logs_by_ver_id: dict[int, ProcessingLog] = {}
+            if ver_ids:
+                ver_logs = db.scalars(
+                    select(ProcessingLog)
+                    .where(
+                        ProcessingLog.merged_report_version_id.in_(ver_ids),
+                        ProcessingLog.processing_status.in_(("success", "warning")),
+                    )
+                    .order_by(ProcessingLog.created_at.desc(), ProcessingLog.id.desc())
+                ).all()
+                for log in ver_logs:
+                    if (
+                        log.merged_report_version_id is not None
+                        and log.merged_report_version_id not in logs_by_ver_id
+                    ):
+                        logs_by_ver_id[log.merged_report_version_id] = log
+
+            for wid, ver in latest_pub_ver_by_ward.items():
+                log = logs_by_ver_id.get(ver.id)
+                if log is None:
+                    log = db.scalar(
+                        select(ProcessingLog)
+                        .where(
+                            ProcessingLog.merged_report_id == ver.merged_report_id,
+                            ProcessingLog.ward_id == wid,
+                            ProcessingLog.processing_status.in_(("success", "warning")),
+                        )
+                        .order_by(ProcessingLog.created_at.desc(), ProcessingLog.id.desc())
+                        .limit(1)
+                    )
+                if log is None:
+                    continue
+                reg_id = ward_region_map.get(wid)
+                if reg_id is not None and reg_id in merged_lamps_by_region_id:
+                    merged_lamps_by_region_id[reg_id] += max(log.final_merged_records, 0)
+                    published_wards_by_region_id[reg_id] += 1
 
         # Latest processing log status per ward determines whether a ward currently has errors
         log_rows = db.execute(
@@ -440,6 +503,16 @@ def get_admin_dashboard(
         only_published_merged=False,
     )
 
+    merged_lamps_by_region = [
+        RegionMergedLampsItem(
+            region_id=reg.id,
+            region_name=reg.region_name,
+            merged_lamps_count=merged_lamps_by_region_id.get(reg.id, 0),
+            published_wards_count=published_wards_by_region_id.get(reg.id, 0),
+        )
+        for reg in regions
+    ]
+
     return AdminDashboardOut(
         total_customers=len(customers),
         total_regions=len(regions),
@@ -454,6 +527,7 @@ def get_admin_dashboard(
         total_pole_survey_reports=len(pole_ward_ids),
         total_lamp_installation_reports=len(lamp_ward_ids),
         total_merged_reports=total_merged_count,
+        merged_lamps_by_region=merged_lamps_by_region,
         recent_uploads=recent_uploads,
         recent_merged_reports=recent_merged_reports,
         latest_processing_activity=_serialize_logs(latest_logs),

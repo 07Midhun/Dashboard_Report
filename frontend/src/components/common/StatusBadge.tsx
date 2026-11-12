@@ -12,6 +12,7 @@ const BADGE_STYLES: Record<string, string> = {
   customer: "bg-slate-100 text-[#173042] border-slate-200",
   led: "bg-emerald-50 text-emerald-700 border-emerald-200",
   non_led: "bg-slate-100 text-slate-700 border-slate-200",
+  empty: "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 const LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ const LABELS: Record<string, string> = {
   customer: "Customer",
   led: "LED",
   non_led: "Non-LED",
+  empty: "Empty",
 };
 
 export function StatusBadge({

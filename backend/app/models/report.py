@@ -217,6 +217,7 @@ class ProcessingLog(Base):
     duplicate_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     invalid_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     unknown_lamp_type_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    empty_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     final_merged_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     warnings_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
     processing_status: Mapped[str] = mapped_column(String(32), nullable=False)  # success | warning | failed

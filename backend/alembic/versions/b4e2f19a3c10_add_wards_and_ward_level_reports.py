@@ -198,3 +198,4 @@ def downgrade() -> None:
     op.drop_index('ix_wards_zone_id', table_name='wards')
     op.drop_table('wards')
     op.drop_column('zones', 'zone_code')
+

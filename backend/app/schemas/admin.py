@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class UserCreate(BaseModel):
@@ -44,16 +44,27 @@ class ExternalLinksBulkUpdate(BaseModel):
 
 
 class LedRuleCreate(BaseModel):
-    pattern: str = Field(..., min_length=1, max_length=150)
+    pattern: str = Field(default="", max_length=150)
     match_type: Literal["exact", "prefix", "contains", "word", "regex"] = "contains"
-    classification: Literal["led", "non_led"] = "led"
+    classification: Literal["led", "non_led", "empty"] = "led"
     is_active: bool = True
+
+    @model_validator(mode="after")
+    def _validate_pattern(self) -> "LedRuleCreate":
+        stripped = self.pattern.strip()
+        if not stripped:
+            if self.classification == "empty":
+                self.pattern = "(blank)"
+                return self
+            raise ValueError("Pattern must not be empty for LED or Non-LED rules.")
+        self.pattern = stripped
+        return self
 
 
 class LedRuleUpdate(BaseModel):
-    pattern: str | None = Field(default=None, min_length=1, max_length=150)
+    pattern: str | None = Field(default=None, max_length=150)
     match_type: Literal["exact", "prefix", "contains", "word", "regex"] | None = None
-    classification: Literal["led", "non_led"] | None = None
+    classification: Literal["led", "non_led", "empty"] | None = None
     is_active: bool | None = None
 
 

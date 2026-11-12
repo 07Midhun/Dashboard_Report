@@ -750,12 +750,17 @@ export function MergedReportPage() {
                         >
                           <Play className="h-4 w-4" />
                           {generating
-                            ? "Processing Reconciliation..."
+                            ? "Merging Large Workbooks... Please Wait"
                             : activeWardReport
                             ? "Regenerate Merged Report"
                             : "Generate Merged Report"}
                         </button>
                       </div>
+                      {generating && (
+                        <p className="text-[11px] text-[#075D6B] bg-teal-50/70 border border-teal-200 rounded-lg px-3 py-2">
+                          Reconciling poles and cloning Excel template styles &amp; formulas. Large workbooks may take longer — please keep this tab open.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -881,7 +886,11 @@ export function MergedReportPage() {
                       },
                       {
                         id: "invalid",
-                        label: `Invalid / Unknown (${previewData.invalid_records.length + previewData.unknown_lamp_types.length})`,
+                        label: `Invalid / Empty / Unknown (${
+                          previewData.invalid_records.length +
+                          (previewData.empty_records?.length ?? 0) +
+                          previewData.unknown_lamp_types.length
+                        })`,
                       },
                     ].map((tab) => (
                       <button
@@ -961,6 +970,10 @@ export function MergedReportPage() {
                             {
                               label: "Invalid (Blank Pole)",
                               val: previewData.summary.invalid_records,
+                            },
+                            {
+                              label: "Empty Lamp Types",
+                              val: previewData.summary.empty_records ?? 0,
                             },
                             {
                               label: "Unknown Lamp Types",
@@ -1223,6 +1236,14 @@ export function MergedReportPage() {
                             )
                           )
                         : previewData.invalid_records;
+                      const emptyList = previewData.empty_records || [];
+                      const emptyRows = q
+                        ? emptyList.filter((e) =>
+                            [e.pole_number, e.lamp_type, e.reason, e.matched_rule].some((v) =>
+                              String(v ?? "").toLowerCase().includes(q)
+                            )
+                          )
+                        : emptyList;
                       const unknownRows = q
                         ? previewData.unknown_lamp_types.filter((u) =>
                             [u.pole_number, u.lamp_type, u.reason].some((v) =>
@@ -1256,6 +1277,57 @@ export function MergedReportPage() {
                                   ))}
                                 </tbody>
                               </table>
+                            )}
+                          </div>
+
+                          <div className="rounded-lg border border-orange-200 bg-white overflow-hidden">
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-orange-50 px-4 py-2.5 text-xs font-bold text-orange-900">
+                              <span>
+                                Empty Lamp Types ({emptyRows.length}) — Excluded (Hyphen &amp; Blank Data)
+                              </span>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => navigate("/admin/settings")}
+                                  className="rounded-lg border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#075D6B] hover:bg-orange-100/50"
+                                >
+                                  Configure Empty Rules
+                                </button>
+                              )}
+                            </div>
+                            {emptyRows.length === 0 ? (
+                              <p className="p-5 text-center text-xs text-[#718096]">
+                                No blank or hyphenated Empty lamp types found.
+                              </p>
+                            ) : (
+                              <div className="max-h-64 overflow-auto">
+                                <table className="min-w-full text-left text-xs">
+                                  <thead className="bg-slate-50 text-[#718096]">
+                                    <tr>
+                                      <th className="px-4 py-2">Survey Row</th>
+                                      <th className="px-4 py-2">Pole Number</th>
+                                      <th className="px-4 py-2">Arm Count</th>
+                                      <th className="px-4 py-2">Lamp Type</th>
+                                      <th className="px-4 py-2">Matched Rule</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {emptyRows.map((e, idx) => (
+                                      <tr key={idx}>
+                                        <td className="px-4 py-2 font-mono">{e.excel_row}</td>
+                                        <td className="px-4 py-2 font-semibold">{e.pole_number}</td>
+                                        <td className="px-4 py-2">{e.arm_count}</td>
+                                        <td className="px-4 py-2 font-mono text-orange-700 font-semibold">
+                                          {e.lamp_type || "(blank)"}
+                                        </td>
+                                        <td className="px-4 py-2 text-[#718096]">
+                                          {e.reason || e.matched_rule || "Classified as Empty"}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
                             )}
                           </div>
 

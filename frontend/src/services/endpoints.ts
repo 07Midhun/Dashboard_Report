@@ -1,4 +1,4 @@
-import { api, downloadAuthorizedFile } from "./api";
+import { api, downloadAuthorizedFile, MERGE_REQUEST_TIMEOUT_MS } from "./api";
 import type {
   AdminDashboardData,
   AuditLogEntry,
@@ -165,6 +165,7 @@ export const reportFilesApi = {
   ): Promise<ReportFile> => {
     const { data } = await api.post<ReportFile>(`${reportBasePath(reportType)}/upload`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: MERGE_REQUEST_TIMEOUT_MS,
       onUploadProgress: (evt) => {
         if (evt.total && onProgress) {
           onProgress(Math.round((evt.loaded * 100) / evt.total));
@@ -189,6 +190,7 @@ export const reportFilesApi = {
   ): Promise<ExcelPreview> => {
     const { data } = await api.get<ExcelPreview>(`${reportBasePath(reportType)}/${id}/preview`, {
       params,
+      timeout: MERGE_REQUEST_TIMEOUT_MS,
     });
     return data;
   },
@@ -217,7 +219,10 @@ export const mergedReportsApi = {
     lamp_sheet?: string;
     lamp_header_row?: number;
   }): Promise<MergedReportInspect> => {
-    const { data } = await api.get<MergedReportInspect>("/merged-reports/inspect", { params });
+    const { data } = await api.get<MergedReportInspect>("/merged-reports/inspect", {
+      params,
+      timeout: MERGE_REQUEST_TIMEOUT_MS,
+    });
     return data;
   },
   generate: async (payload: {
@@ -229,7 +234,9 @@ export const mergedReportsApi = {
     lamp_installation_mapping: MappingInput;
     save_mapping: boolean;
   }): Promise<MergedReportPreview> => {
-    const { data } = await api.post<MergedReportPreview>("/merged-reports/generate", payload);
+    const { data } = await api.post<MergedReportPreview>("/merged-reports/generate", payload, {
+      timeout: MERGE_REQUEST_TIMEOUT_MS,
+    });
     return data;
   },
   list: async (params?: {
@@ -244,6 +251,7 @@ export const mergedReportsApi = {
   preview: async (id: number, version?: number): Promise<MergedReportPreview> => {
     const { data } = await api.get<MergedReportPreview>(`/merged-reports/${id}/preview`, {
       params: version ? { version } : undefined,
+      timeout: MERGE_REQUEST_TIMEOUT_MS,
     });
     return data;
   },
@@ -333,7 +341,7 @@ export const adminApi = {
   createLedRule: async (payload: {
     pattern: string;
     match_type: "exact" | "prefix" | "contains" | "word" | "regex";
-    classification: "led" | "non_led";
+    classification: "led" | "non_led" | "empty";
     is_active: boolean;
   }): Promise<LedRule> => {
     const { data } = await api.post<LedRule>("/led-rules", payload);

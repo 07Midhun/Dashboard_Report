@@ -63,3 +63,4 @@ def remove_ward(
 ) -> MessageResponse:
     delete_ward(db, ward_id, auth.user.id, get_client_ip(request))
     return MessageResponse(message="Ward deleted successfully.")
+

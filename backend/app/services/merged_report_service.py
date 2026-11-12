@@ -308,6 +308,7 @@ def _serialize_merged_report(
             duplicate_records=latest_log.duplicate_records,
             invalid_records=latest_log.invalid_records,
             unknown_lamp_type_records=latest_log.unknown_lamp_type_records,
+            empty_records=latest_log.empty_records,
             final_merged_records=latest_log.final_merged_records,
             processing_status=latest_log.processing_status,
             warnings=latest_log.warnings_json or [],
@@ -507,6 +508,7 @@ def generate_merged_report(
         "duplicate_records": result.duplicate_records,
         "invalid_records": result.invalid_records,
         "unknown_lamp_types": result.unknown_lamp_types,
+        "empty_records": result.empty_records,
     }
     rel_preview_path = storage_service.save_json_bytes(
         customer_id=payload.customer_id,
@@ -600,6 +602,7 @@ def generate_merged_report(
             duplicate_records=result.summary["duplicate_records"],
             invalid_records=result.summary["invalid_records"],
             unknown_lamp_type_records=result.summary["unknown_lamp_type_records"],
+            empty_records=result.summary["empty_records"],
             final_merged_records=result.summary["final_merged_records"],
             warnings_json=all_warnings,
             processing_status=proc_status,
@@ -630,7 +633,8 @@ def generate_merged_report(
     )
     mr_out = _serialize_merged_report(db, refreshed, is_admin=True)
     summary_out = ProcessingSummaryOut(
-        **{k: v for k, v in result.summary.items() if k != "non_led_records"},
+        **{k: v for k, v in result.summary.items() if k not in {"non_led_records", "empty_records"}},
+        empty_records=result.summary["empty_records"],
         non_led_records=result.summary["non_led_records"],
         processing_status=proc_status,
         warnings=all_warnings,
@@ -646,6 +650,7 @@ def generate_merged_report(
         duplicate_records=result.duplicate_records,
         invalid_records=result.invalid_records,
         unknown_lamp_types=result.unknown_lamp_types,
+        empty_records=result.empty_records,
     )
 
 
@@ -757,6 +762,7 @@ def preview_merged_report(
         duplicate_records=raw_sum.get("duplicate_records", 0),
         invalid_records=raw_sum.get("invalid_records", 0),
         unknown_lamp_type_records=raw_sum.get("unknown_lamp_type_records", 0),
+        empty_records=raw_sum.get("empty_records", 0),
         non_led_records=raw_sum.get("non_led_records", 0),
         final_merged_records=raw_sum.get("final_merged_records", 0),
         processing_status="warning" if raw_sum.get("warnings") else "success",
@@ -773,6 +779,7 @@ def preview_merged_report(
         duplicate_records=data.get("duplicate_records", []),
         invalid_records=data.get("invalid_records", []),
         unknown_lamp_types=data.get("unknown_lamp_types", []),
+        empty_records=data.get("empty_records", []),
     )
 
 

@@ -235,3 +235,45 @@ def test_custom_led_classification_rule_support():
     assert classifier.classify("Solar LED 30W")[0] == "led"
     assert classifier.classify("Sealed Beam")[0] == "unknown"
 
+
+def test_case_9_empty_lamp_types_hyphen_and_blank_classified_as_empty():
+    lamp_rows = [_lamp_row(2, "P001")]
+    # Simulate an admin adding '-' with default 'contains' match_type alongside custom '--'
+    classifier = LedClassifier(
+        [
+            RuleSpec("NON-LED", "contains", "non_led"),
+            RuleSpec("LED", "word", "led"),
+            RuleSpec("-", "contains", "empty"),
+            RuleSpec("--", "exact", "empty"),
+            RuleSpec("N/A", "exact", "empty"),
+        ]
+    )
+    survey_rows = [
+        _survey_row(2, "P001", lamp="LED"),
+        _survey_row(3, "P002", lamp="-"),         # hyphen -> empty
+        _survey_row(4, "P003", lamp=" - "),       # padded hyphen -> empty
+        _survey_row(5, "P004", lamp=""),          # blank -> empty
+        _survey_row(6, "P005", lamp="   "),       # whitespace -> empty
+        _survey_row(7, "P006", lamp=None),        # None -> empty
+        _survey_row(8, "P007", lamp="n/a"),       # custom empty rule -> empty
+        _survey_row(9, "P008", lamp="LED-60W"),   # hyphenated LED stays eligible LED
+        _survey_row(10, "P009", lamp="Non-LED - 70W"),  # stays non_led
+        _survey_row(11, "P010", lamp="Induction"),      # still flagged unknown
+    ]
+
+    res = reconcile_reports(
+        lamp_headers=LAMP_HEADERS,
+        lamp_rows=lamp_rows,
+        lamp_mapping=LAMP_MAP,
+        survey_headers=SURVEY_HEADERS,
+        survey_rows=survey_rows,
+        survey_mapping=SURVEY_MAP,
+        classifier=classifier,
+    )
+    assert res.summary["empty_records"] == 6
+    assert [r["pole_number"] for r in res.empty_records] == ["P002", "P003", "P004", "P005", "P006", "P007"]
+    assert res.summary["non_led_records"] == 1
+    assert res.summary["unknown_lamp_type_records"] == 1
+    assert res.unknown_lamp_types[0]["pole_number"] == "P010"
+    assert [r["generated_pole_number"] for r in res.newly_added_records] == ["P008-L2"]
+

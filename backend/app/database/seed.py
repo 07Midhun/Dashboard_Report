@@ -49,6 +49,9 @@ DEFAULT_LED_RULES = [
     ("Incandescent", "contains", "non_led"),
     ("Mercury Vapour", "contains", "non_led"),
     ("Mercury Vapor", "contains", "non_led"),
+    # Empty rules (hyphen & blank cells)
+    ("-", "exact", "empty"),
+    ("(blank)", "exact", "empty"),
 ]
 
 DEFAULT_EXTERNAL_LINKS = [

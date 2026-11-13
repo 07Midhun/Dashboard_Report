@@ -42,6 +42,19 @@ ARM_ALIASES = {
 }
 
 LAMP_ALIASES = {
+    "light's /empty pole",
+    "lights /empty pole",
+    "light's / empty pole",
+    "lights / empty pole",
+    "lights/empty pole",
+    "light/empty pole",
+    "light's/empty pole",
+    "light / empty pole",
+    "light's /empty",
+    "lights /empty",
+    "light / empty",
+    "light/empty",
+    "empty pole",
     "lamp type",
     "lamp_type",
     "type of lamp",
@@ -139,9 +152,18 @@ def suggest_column_mapping(headers: list[str]) -> tuple[dict[str, str | None], b
     }
     ambiguous = False
 
-    def find_match(aliases: set[str], fuzzy_tokens: tuple[str, ...]) -> str | None:
+    def find_match(
+        aliases: set[str],
+        fuzzy_tokens: tuple[str, ...],
+        exclude_tokens: tuple[str, ...] = (),
+    ) -> str | None:
         nonlocal ambiguous
-        exact_hits = [h for h in headers if normalize_header_name(h) in aliases]
+        exact_hits = [
+            h
+            for h in headers
+            if normalize_header_name(h) in aliases
+            and not any(ex in normalize_header_name(h) for ex in exclude_tokens)
+        ]
         if len(exact_hits) == 1:
             return exact_hits[0]
         if len(exact_hits) > 1:
@@ -152,6 +174,7 @@ def suggest_column_mapping(headers: list[str]) -> tuple[dict[str, str | None], b
             h
             for h in headers
             if any(tok in normalize_header_name(h) for tok in fuzzy_tokens)
+            and not any(ex in normalize_header_name(h) for ex in exclude_tokens)
         ]
         if len(fuzzy_hits) == 1:
             ambiguous = True  # Fuzzy matches should be confirmed by admin
@@ -163,7 +186,11 @@ def suggest_column_mapping(headers: list[str]) -> tuple[dict[str, str | None], b
 
     mapping["pole_number"] = find_match(POLE_ALIASES, ("pole",))
     mapping["arm_count"] = find_match(ARM_ALIASES, ("arm",))
-    mapping["lamp_type"] = find_match(LAMP_ALIASES, ("lamp", "luminaire", "fixture"))
+    mapping["lamp_type"] = find_match(
+        LAMP_ALIASES,
+        ("light", "lamp", "luminaire", "fixture"),
+        exclude_tokens=("lamp id", "led id", "lamp_id", "led_id"),
+    )
 
     missing_required = any(mapping[k] is None for k in ("pole_number", "arm_count", "lamp_type"))
     return mapping, (missing_required or ambiguous)

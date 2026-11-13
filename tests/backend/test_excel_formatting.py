@@ -121,8 +121,8 @@ def test_case_11_preserves_original_excel_formatting_and_writes_in_same_pole_cel
         ),
     )
     assert [r["generated_pole_number"] for r in result.newly_added_records] == [
-        "P003-L3",
-        "P004-L4",
+        "P003-L1",
+        "P004-L2",
     ]
 
     write_merged_workbook(
@@ -155,13 +155,13 @@ def test_case_11_preserves_original_excel_formatting_and_writes_in_same_pole_cel
         assert ws["D6"].value == "=D5+30"
 
         # Newly added rows written directly in Column A (Pole Number) with inherited styles
-        assert ws["A7"].value == "P003-L3"
+        assert ws["A7"].value == "P003-L1"
         assert ws["B7"].value == 1
         assert ws["C7"].value == "LED 40W"
         assert ws["D7"].value is None  # unmapped column left blank
         assert ws["E7"].value is None
 
-        assert ws["A8"].value == "P004-L4"
+        assert ws["A8"].value == "P004-L2"
         assert ws["B8"].value == 2
         assert ws["C8"].value == "LED Street Light"
 

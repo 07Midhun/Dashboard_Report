@@ -240,7 +240,7 @@ def test_case_9_10_12_full_workflow_ward_isolation_stale_and_customer_rbac(clien
         == 201
     )
 
-    # 4. Generate Merged Report for Ward W108 -> only P003-L3 added
+    # 4. Generate Merged Report for Ward W108 -> only P003-L2 added (arm count = 2)
     gen_a = client.post(
         "/api/merged-reports/generate",
         json={
@@ -258,7 +258,7 @@ def test_case_9_10_12_full_workflow_ward_isolation_stale_and_customer_rbac(clien
     merged_a_id = preview_a["merged_report"]["id"]
     assert preview_a["merged_report"]["ward_id"] == ward_a_id
     assert preview_a["merged_report"]["ward_number"] == "W108"
-    assert [r["generated_pole_number"] for r in preview_a["newly_added_records"]] == ["P003-L3"]
+    assert [r["generated_pole_number"] for r in preview_a["newly_added_records"]] == ["P003-L2"]
 
     # Generate Merged Report for sibling Ward W109 -> completely isolated from W108!
     gen_b = client.post(
@@ -277,8 +277,8 @@ def test_case_9_10_12_full_workflow_ward_isolation_stale_and_customer_rbac(clien
     merged_b_id = gen_b.json()["merged_report"]["id"]
     assert [r["generated_pole_number"] for r in gen_b.json()["newly_added_records"]] == [
         "P001-L1",
-        "P002-L2",
-        "P003-L3",
+        "P002-L1",
+        "P003-L2",
     ]
 
     # 5. Customer CANNOT access Draft Merged Report or publish it

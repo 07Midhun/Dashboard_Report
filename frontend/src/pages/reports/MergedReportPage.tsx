@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   FileSpreadsheet,
@@ -34,6 +36,7 @@ import { HierarchyExplorer } from "../../components/hierarchy/HierarchyExplorer"
 
 type PreviewTab =
   | "summary"
+  | "merged"
   | "added"
   | "existing"
   | "skipped"
@@ -76,11 +79,13 @@ export function MergedReportPage() {
   const [generating, setGenerating] = useState(false);
 
   // Preview & Publish state
+  const previewSectionRef = useRef<HTMLDivElement>(null);
   const [previewData, setPreviewData] = useState<MergedReportPreview | null>(null);
   const [previewedVersion, setPreviewedVersion] = useState<number | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<PreviewTab>("summary");
   const [previewSearch, setPreviewSearch] = useState("");
+  const [mergedPage, setMergedPage] = useState(1);
   const [publishConfirmId, setPublishConfirmId] = useState<number | null>(null);
   const [publishing, setPublishing] = useState(false);
 
@@ -199,13 +204,19 @@ export function MergedReportPage() {
       : null;
 
   const loadPreview = useCallback(
-    async (mergedId: number, version?: number) => {
+    async (mergedId: number, version?: number, scrollToPreview?: boolean) => {
       setLoadingPreview(true);
       try {
         const res = await mergedReportsApi.preview(mergedId, version);
         setPreviewData(res);
         setPreviewedVersion(version ?? res.merged_report.current_version);
         setPreviewSearch("");
+        setMergedPage(1);
+        if (scrollToPreview) {
+          setTimeout(() => {
+            previewSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }
       } catch (err) {
         showToast("error", "Preview Load Failed", extractErrorMessage(err));
       } finally {
@@ -313,13 +324,6 @@ export function MergedReportPage() {
       setPublishing(false);
     }
   };
-
-  const visibleReports = reports.filter((r) => {
-    if (selection.wardId) return r.ward_id === selection.wardId;
-    if (selection.zoneId) return r.zone_id === selection.zoneId;
-    if (selection.regionId) return r.region_id === selection.regionId;
-    return true;
-  });
 
   return (
     <div className="space-y-6">
@@ -770,7 +774,7 @@ export function MergedReportPage() {
 
           {/* 6-Tab Preview & Summary Section */}
           {(loadingPreview || previewData) && (
-            <div className="rounded-xl border border-slate-200/80 bg-white shadow-card overflow-hidden">
+            <div ref={previewSectionRef} className="rounded-xl border border-slate-200/80 bg-white shadow-card overflow-hidden">
               {loadingPreview ? (
                 <p className="p-8 text-center text-xs text-[#718096]">
                   Loading Merged Report preview &amp; summary...
@@ -864,10 +868,17 @@ export function MergedReportPage() {
                     </div>
                   </div>
 
-                  {/* 6 Preview Tabs */}
+                  {/* Preview Tabs */}
                   <div className="flex overflow-x-auto border-b border-slate-200 bg-white px-4">
                     {[
                       { id: "summary", label: "Processing Summary" },
+                      {
+                        id: "merged",
+                        label: `All Merged Records (${
+                          previewData.existing_lamp_records.length +
+                          previewData.newly_added_records.length
+                        })`,
+                      },
                       {
                         id: "added",
                         label: `Newly Added LED (${previewData.newly_added_records.length})`,
@@ -896,7 +907,10 @@ export function MergedReportPage() {
                       <button
                         key={tab.id}
                         type="button"
-                        onClick={() => setActiveTab(tab.id as PreviewTab)}
+                        onClick={() => {
+                          setActiveTab(tab.id as PreviewTab);
+                          setMergedPage(1);
+                        }}
                         className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs font-semibold transition ${
                           activeTab === tab.id
                             ? "border-[#075D6B] text-[#075D6B]"
@@ -1055,16 +1069,162 @@ export function MergedReportPage() {
                       </div>
                     )}
 
+                    {/* All Merged Records (Combined Existing + Newly Added) */}
+                    {activeTab === "merged" && (() => {
+                      const q = previewSearch.trim().toLowerCase();
+                      const existingList = previewData.existing_lamp_records.map((r, i) => ({
+                        type: "existing" as const,
+                        globalIdx: i + 1,
+                        row: r,
+                      }));
+                      const addedList = previewData.newly_added_records.map((r, i) => ({
+                        type: "new" as const,
+                        globalIdx: existingList.length + i + 1,
+                        row: r.mapped_values || {},
+                        generatedPole: r.generated_pole_number,
+                        origPole: r.original_pole_number,
+                        arm: r.arm_count,
+                        lSeq: r.l_sequence,
+                        lampType: r.lamp_type,
+                      }));
+
+                      const combined = [...existingList, ...addedList];
+                      const filtered = q
+                        ? combined.filter((item) =>
+                            item.type === "existing"
+                              ? previewData.lamp_columns.some((c) =>
+                                  String(item.row[c] ?? "").toLowerCase().includes(q)
+                                )
+                              : [
+                                  item.origPole,
+                                  item.generatedPole,
+                                  item.lampType,
+                                  item.arm,
+                                  ...Object.values(item.row),
+                                ].some((v) => String(v ?? "").toLowerCase().includes(q))
+                          )
+                        : combined;
+
+                      const PAGE_SIZE = 50;
+                      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+                      const currentPage = Math.min(mergedPage, totalPages);
+                      const startIdx = (currentPage - 1) * PAGE_SIZE;
+                      const pageRows = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50 px-3.5 py-2 rounded-lg border border-slate-200">
+                            <div>
+                              Showing{" "}
+                              <span className="font-bold text-[#173042]">
+                                {filtered.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, filtered.length)}
+                              </span>{" "}
+                              of <span className="font-bold text-[#173042]">{filtered.length}</span> total merged records
+                              ({previewData.existing_lamp_records.length} Existing + {previewData.newly_added_records.length} Newly Added)
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={currentPage <= 1}
+                                onClick={() => setMergedPage((p) => Math.max(1, p - 1))}
+                                className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-[#173042] disabled:opacity-40 hover:bg-slate-100"
+                              >
+                                <ChevronLeft className="h-3 w-3" /> Prev
+                              </button>
+                              <span className="px-2 font-mono text-xs">
+                                {currentPage} / {totalPages}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={currentPage >= totalPages}
+                                onClick={() => setMergedPage((p) => Math.min(totalPages, p + 1))}
+                                className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-[#173042] disabled:opacity-40 hover:bg-slate-100"
+                              >
+                                Next <ChevronRight className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="max-h-[500px] overflow-auto rounded-lg border border-slate-200">
+                            <table className="min-w-full text-left text-xs">
+                              <thead className="sticky top-0 bg-slate-100 text-[#173042]">
+                                <tr>
+                                  <th className="px-3 py-2.5">Row #</th>
+                                  <th className="px-3 py-2.5">Status</th>
+                                  {previewData.lamp_columns.map((col) => (
+                                    <th key={col} className="px-3 py-2.5 whitespace-nowrap">
+                                      {col}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {pageRows.map((item) => (
+                                  <tr
+                                    key={item.globalIdx}
+                                    className={
+                                      item.type === "new"
+                                        ? "bg-teal-50/50 hover:bg-teal-100/50 font-medium"
+                                        : "hover:bg-slate-50"
+                                    }
+                                  >
+                                    <td className="px-3 py-2 font-mono text-slate-500">{item.globalIdx}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                      {item.type === "new" ? (
+                                        <span className="inline-flex items-center rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-bold text-[#075D6B] border border-teal-200">
+                                          New LED (L{item.lSeq})
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                          Existing
+                                        </span>
+                                      )}
+                                    </td>
+                                    {previewData.lamp_columns.map((col) => {
+                                      const val = item.row[col];
+                                      const isPoleOrLamp =
+                                        item.type === "new" &&
+                                        (col.toLowerCase().includes("pole number") ||
+                                          col.toLowerCase().includes("lamp id") ||
+                                          col.toLowerCase().includes("led id") ||
+                                          col.toLowerCase().includes("light"));
+                                      return (
+                                        <td
+                                          key={col}
+                                          className={`px-3 py-2 whitespace-nowrap ${
+                                            isPoleOrLamp ? "font-bold text-[#075D6B]" : ""
+                                          }`}
+                                        >
+                                          {val || (item.type === "new" ? "—" : "")}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Newly Added LED Tab */}
                     {activeTab === "added" && (() => {
                       const q = previewSearch.trim().toLowerCase();
                       const rows = q
                         ? previewData.newly_added_records.filter((r) =>
-                            [r.original_pole_number, r.generated_pole_number, r.lamp_type, r.arm_count]
+                            [
+                              r.original_pole_number,
+                              r.generated_pole_number,
+                              r.lamp_type,
+                              r.arm_count,
+                              r.mapped_values ? JSON.stringify(r.mapped_values) : "",
+                            ]
                               .some((v) => String(v ?? "").toLowerCase().includes(q))
                           )
                         : previewData.newly_added_records;
                       return (
-                        <div className="max-h-96 overflow-auto rounded-lg border border-slate-200">
+                        <div className="max-h-[500px] overflow-auto rounded-lg border border-slate-200">
                           {rows.length === 0 ? (
                             <p className="p-6 text-center text-xs text-[#718096]">
                               {previewData.newly_added_records.length === 0
@@ -1075,27 +1235,52 @@ export function MergedReportPage() {
                             <table className="min-w-full text-left text-xs">
                               <thead className="sticky top-0 bg-slate-100 text-[#173042]">
                                 <tr>
-                                  <th className="px-4 py-2.5">Survey Row</th>
-                                  <th className="px-4 py-2.5">Original Pole</th>
-                                  <th className="px-4 py-2.5">Generated Pole (Pole Cell)</th>
-                                  <th className="px-4 py-2.5">L#</th>
-                                  <th className="px-4 py-2.5">Arm Count</th>
-                                  <th className="px-4 py-2.5">Lamp Type</th>
+                                  <th className="px-3 py-2.5">Survey Row</th>
+                                  <th className="px-3 py-2.5">Original Pole</th>
+                                  <th className="px-3 py-2.5">Pole Number Cell</th>
+                                  <th className="px-3 py-2.5">Lamp ID / LED ID Cell</th>
+                                  <th className="px-3 py-2.5">Light's / Empty Pole Cell</th>
+                                  <th className="px-3 py-2.5">Arm Count</th>
+                                  <th className="px-3 py-2.5">Survey Lamp</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100">
-                                {rows.map((r, idx) => (
-                                  <tr key={idx} className="hover:bg-teal-50/40">
-                                    <td className="px-4 py-2 font-mono">{r.survey_excel_row}</td>
-                                    <td className="px-4 py-2">{r.original_pole_number}</td>
-                                    <td className="px-4 py-2 font-bold text-[#075D6B]">
-                                      {r.generated_pole_number}
-                                    </td>
-                                    <td className="px-4 py-2 font-mono">L{r.l_sequence}</td>
-                                    <td className="px-4 py-2">{r.arm_count}</td>
-                                    <td className="px-4 py-2">{r.lamp_type}</td>
-                                  </tr>
-                                ))}
+                                {rows.map((r, idx) => {
+                                  const lightsEmptyVal =
+                                    r.mapped_values?.["Light's /Empty Pole "] ||
+                                    r.mapped_values?.["Light's /Empty Pole"] ||
+                                    r.mapped_values?.["Lights /Empty Pole"] ||
+                                    r.lamp_type ||
+                                    "LED";
+                                  const lampIdVal =
+                                    r.mapped_values?.["Lamp ID"] ||
+                                    r.mapped_values?.["LED ID"] ||
+                                    r.mapped_values?.["Lamp Id"] ||
+                                    r.generated_pole_number;
+                                  return (
+                                    <tr key={idx} className="hover:bg-teal-50/40">
+                                      <td className="px-3 py-2 font-mono text-slate-500">{r.survey_excel_row}</td>
+                                      <td className="px-3 py-2 text-slate-700">{r.original_pole_number}</td>
+                                      <td className="px-3 py-2 font-bold font-mono text-[#075D6B]">
+                                        {r.generated_pole_number}
+                                      </td>
+                                      <td className="px-3 py-2 font-bold font-mono text-[#0D7780]">
+                                        {lampIdVal}
+                                      </td>
+                                      <td className="px-3 py-2 font-semibold text-emerald-700">
+                                        <span className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                                          {lightsEmptyVal}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                                          {r.arm_count} (L{r.l_sequence})
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-600">{r.lamp_type}</td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           )}
@@ -1442,98 +1627,6 @@ export function MergedReportPage() {
               ) : null}
             </div>
           )}
-
-          {/* Table of Merged Reports */}
-          <div className="rounded-xl border border-slate-200/80 bg-white shadow-card overflow-hidden">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <h2 className="text-sm font-bold text-[#173042]">
-                {isAdmin ? "All Merged Reports" : "Published Merged Reports"} (
-                {visibleReports.length})
-              </h2>
-            </div>
-
-            {loadingList ? (
-              <p className="p-6 text-center text-xs text-[#718096]">Loading Merged Reports...</p>
-            ) : visibleReports.length === 0 ? (
-              <p className="p-8 text-center text-xs text-[#718096]">
-                {isAdmin
-                  ? "No Merged Reports generated yet for the selected filter."
-                  : "No published Merged Reports are available for this selection yet."}
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-[#718096]">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Ward / Zone / Region</th>
-                      <th className="px-4 py-3 font-semibold">Version</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Summary</th>
-                      <th className="px-4 py-3 font-semibold text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {visibleReports.map((mr) => (
-                      <tr key={mr.id} className="hover:bg-slate-50/70">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            <span className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#075D6B] border border-teal-200">
-                              {mr.ward_number}
-                            </span>
-                            <span className="font-semibold text-[#173042]">{mr.ward_name}</span>
-                          </div>
-                          <p className="mt-0.5 text-[11px] text-[#718096]">
-                            {mr.region_name} • {mr.zone_name}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 font-mono font-semibold text-[#075D6B]">
-                          v{mr.current_version}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={mr.is_outdated ? "outdated" : mr.status} />
-                        </td>
-                        <td className="px-4 py-3 text-[#718096]">
-                          {mr.latest_summary ? (
-                            <>
-                              <strong className="text-[#075D6B]">
-                                +{mr.latest_summary.added_records}
-                              </strong>{" "}
-                              added / {mr.latest_summary.final_merged_records} total
-                            </>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => loadPreview(mr.id)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 font-semibold text-[#173042] hover:bg-slate-100"
-                            >
-                              <Eye className="h-3 w-3" /> Preview
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                mergedReportsApi.download(
-                                  mr.id,
-                                  `Merged_${mr.zone_name}_${mr.ward_number}_v${mr.current_version}.xlsx`
-                                )
-                              }
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#075D6B] px-2.5 py-1 font-semibold text-white hover:bg-[#0D7780]"
-                            >
-                              <FileSpreadsheet className="h-3 w-3" /> Download
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

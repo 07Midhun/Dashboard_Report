@@ -1,3 +1,11 @@
+import sys
+from pathlib import Path
+
+# Ensure backend root is in sys.path so 'from app...' imports work regardless of cwd
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware

@@ -66,8 +66,15 @@ class Settings(BaseModel):
 
 
 def load_settings() -> Settings:
-    raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
-    cors_list = [origin.strip() for origin in raw_cors.split(",") if origin.strip()]
+    raw_cors = os.getenv("CORS_ORIGINS", "*")
+    cleaned = raw_cors.strip().strip("[]'\"")
+    if not cleaned or cleaned == "*":
+        cors_list = ["*"]
+    else:
+        cors_list = [origin.strip().strip("'\"") for origin in cleaned.split(",") if origin.strip().strip("'\"")]
+    if "*" not in cors_list:
+        # Always ensure localhost and pages.dev wildcard support
+        cors_list.extend(["http://localhost:5173", "http://127.0.0.1:5173"])
 
     storage_env = os.getenv("STORAGE_ROOT")
     storage_root = Path(storage_env) if storage_env else (BASE_DIR / "storage")

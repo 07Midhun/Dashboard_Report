@@ -44,6 +44,16 @@ app.add_middleware(
 )
 
 
+@app.get("/", tags=["Root"])
+def root() -> dict[str, str]:
+    return {
+        "app": settings.app_name,
+        "status": "online",
+        "health": "/api/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/api/health", tags=["Health"])
 def health_check(db: Session = Depends(get_db)) -> dict[str, str]:
     db.execute(text("SELECT 1"))

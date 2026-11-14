@@ -44,26 +44,53 @@ INITIAL_HIERARCHY = {
 }
 
 DEFAULT_LED_RULES = [
-    # LED rules
+    # LED rules and LED combinations
     ("LED", "word", "led"),
+    ("LED", "prefix", "led"),
+    ("FL LED", "contains", "led"),
+    ("LED,LED", "contains", "led"),
+    ("LED, LED", "contains", "led"),
+    ("FL LED,LED", "contains", "led"),
+    ("FL LED, LED", "contains", "led"),
+    ("LED,FL LED", "contains", "led"),
+    ("LED, FL LED", "contains", "led"),
+    ("FL LED,FL LED", "contains", "led"),
+    ("FL LED, FL LED", "contains", "led"),
     ("LED 40W", "exact", "led"),
     ("LED 60W", "exact", "led"),
     ("LED 90W", "exact", "led"),
     ("LED Street Light", "contains", "led"),
-    # Non-LED rules
+    ("LED Fitting", "contains", "led"),
+    ("LED Luminaire", "contains", "led"),
+    # Non-LED rules and combinations
+    ("NON-LED", "contains", "non_led"),
+    ("NON LED", "contains", "non_led"),
     ("SVL", "word", "non_led"),
+    ("TUBELIGHT", "contains", "non_led"),
+    ("TUBE LIGHT", "contains", "non_led"),
+    ("TUBE", "word", "non_led"),
+    ("SVL,TUBELIGHT", "contains", "non_led"),
+    ("SVL, TUBELIGHT", "contains", "non_led"),
+    ("TUBELIGHT,SVL", "contains", "non_led"),
+    ("TUBELIGHT, SVL", "contains", "non_led"),
+    ("SVL,SVL", "contains", "non_led"),
+    ("SVL, SVL", "contains", "non_led"),
+    ("FTL", "word", "non_led"),
     ("Sodium Vapour", "contains", "non_led"),
     ("Sodium Vapor", "contains", "non_led"),
     ("HPSV", "word", "non_led"),
     ("LPSV", "word", "non_led"),
     ("Conventional", "contains", "non_led"),
     ("Metal Halide", "contains", "non_led"),
+    ("MH", "word", "non_led"),
     ("CFL", "word", "non_led"),
     ("Fluorescent", "contains", "non_led"),
     ("Halogen", "contains", "non_led"),
     ("Incandescent", "contains", "non_led"),
     ("Mercury Vapour", "contains", "non_led"),
     ("Mercury Vapor", "contains", "non_led"),
+    ("MVL", "word", "non_led"),
+    ("GLS", "word", "non_led"),
     # Empty rules (hyphen & blank cells)
     ("-", "exact", "empty"),
     ("(blank)", "exact", "empty"),
@@ -278,7 +305,7 @@ def seed_initial_data(db: Session) -> None:
     for pattern, match_type, classification in DEFAULT_LED_RULES:
         existing_rule = db.scalar(
             select(LedClassificationRule).where(
-                LedClassificationRule.pattern == pattern,
+                func.lower(LedClassificationRule.pattern) == pattern.lower(),
                 LedClassificationRule.match_type == match_type,
             )
         )
@@ -292,6 +319,9 @@ def seed_initial_data(db: Session) -> None:
                     created_by=admin.id,
                 )
             )
+        elif existing_rule.classification != classification:
+            existing_rule.classification = classification
+            existing_rule.is_active = True
 
     # 5. Seed configurable external links
     for link_key, link_name in DEFAULT_EXTERNAL_LINKS:

@@ -2,7 +2,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.models.config_models import ExternalLink, LedClassificationRule
 from app.models.hierarchy import Customer, Region, Ward, Zone
 from app.models.user import User, UserCustomerPermission

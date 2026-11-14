@@ -34,6 +34,21 @@ from app.database.session import get_db
 async def lifespan(_: FastAPI):
     settings.storage_root.mkdir(parents=True, exist_ok=True)
     settings.temp_processing_dir.mkdir(parents=True, exist_ok=True)
+
+    # Automatically create all database tables and seed default users
+    try:
+        from app.database.session import engine, SessionLocal
+        from app.database.base import Base
+        import app.models  # noqa: F401
+        Base.metadata.create_all(bind=engine)
+
+        if settings.seed_default_data:
+            from app.database.seed import seed_initial_data
+            with SessionLocal() as db:
+                seed_initial_data(db)
+    except Exception as exc:
+        print(f"Startup database initialization error: {exc}")
+
     yield
 
 

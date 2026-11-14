@@ -39,7 +39,13 @@ async def lifespan(_: FastAPI):
     try:
         from app.database.session import engine, SessionLocal
         from app.database.base import Base
+        from app.database.auto_migrate import auto_heal_schema
         import app.models  # noqa: F401
+
+        # Run safe idempotent schema patches first to ensure existing tables have all columns
+        auto_heal_schema(engine)
+
+        # Create any remaining missing tables
         Base.metadata.create_all(bind=engine)
 
         if settings.seed_default_data:
@@ -82,6 +88,28 @@ def root() -> dict[str, str]:
 def health_check(db: Session = Depends(get_db)) -> dict[str, str]:
     db.execute(text("SELECT 1"))
     return {"status": "ok", "database": "connected", "environment": settings.app_env}
+
+
+@app.get("/api/db-diagnostics", tags=["Diagnostics"])
+def db_diagnostics(db: Session = Depends(get_db)):
+    try:
+        tables = db.execute(
+            text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        ).scalars().all()
+        user_cols = db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
+        ).scalars().all()
+        admin_count = db.execute(
+            text("SELECT count(*) FROM users WHERE lower(email) = 'admin@gmail.com'")
+        ).scalar()
+        return {
+            "status": "ok",
+            "tables": tables,
+            "users_columns": user_cols,
+            "admin_user_exists": (admin_count or 0) > 0,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 app.include_router(auth.router, prefix="/api")

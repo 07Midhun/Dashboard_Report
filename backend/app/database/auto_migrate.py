@@ -30,6 +30,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE D
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 UPDATE users SET email = COALESCE(username, 'admin') || '@schnell.local' WHERE email IS NULL;
+UPDATE users SET status = 'active' WHERE status IS NULL;
+UPDATE users SET role = 'admin' WHERE email = 'admin@gmail.com';
 
 -- Ensure customers table has all required columns
 CREATE TABLE IF NOT EXISTS customers (
@@ -134,13 +136,16 @@ CREATE TABLE IF NOT EXISTS wards (
 );
 
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS zone_id INTEGER;
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS region_id INTEGER;
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS ward_code VARCHAR(64);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS ward_name VARCHAR(200);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS ward_number VARCHAR(64);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active';
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE wards ALTER COLUMN region_id DROP NOT NULL;
 UPDATE wards SET ward_number = ward_code WHERE ward_number IS NULL;
+UPDATE wards w SET region_id = z.region_id FROM zones z WHERE w.zone_id = z.id AND w.region_id IS NULL;
 
 -- Ensure audit_logs table
 CREATE TABLE IF NOT EXISTS audit_logs (

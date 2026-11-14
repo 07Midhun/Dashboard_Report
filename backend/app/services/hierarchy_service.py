@@ -872,6 +872,7 @@ def create_ward(db: Session, payload: WardCreate, user_id: int, ip: str | None) 
 
     ward = Ward(
         zone_id=payload.zone_id,
+        region_id=zone.region_id,
         ward_name=ward_name,
         ward_number=ward_number,
         ward_code=ward_code,

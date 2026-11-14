@@ -7,8 +7,11 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -69,6 +72,23 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     import traceback
@@ -80,10 +100,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         content={"detail": f"{exc.__class__.__name__}: {str(exc)}"},
     )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"^https?://.*" if ("*" in settings.cors_origins or settings.app_env != "production") else r"^https://.*\.pages\.dev$",
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,15 +154,31 @@ def db_diagnostics(reseed: bool = False, db: Session = Depends(get_db)):
         region_cols = db.execute(
             text("SELECT column_name FROM information_schema.columns WHERE table_name = 'regions'")
         ).scalars().all()
+        zone_cols = db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'zones'")
+        ).scalars().all()
+        ward_cols = db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'wards'")
+        ).scalars().all()
         audit_cols = db.execute(
             text("SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_logs'")
         ).scalars().all()
         has_admin = False
+        admin_info = None
         if "email" in user_cols:
-            admin_count = db.execute(
-                text("SELECT count(*) FROM users WHERE lower(email) = 'admin@gmail.com'")
-            ).scalar()
-            has_admin = (admin_count or 0) > 0
+            admin_row = db.execute(
+                text("SELECT id, name, email, username, role, status FROM users WHERE lower(email) = 'admin@gmail.com' LIMIT 1")
+            ).first()
+            if admin_row:
+                has_admin = True
+                admin_info = {
+                    "id": admin_row[0],
+                    "name": admin_row[1],
+                    "email": admin_row[2],
+                    "username": admin_row[3],
+                    "role": admin_row[4],
+                    "status": admin_row[5],
+                }
         regions_data = []
         if "region_name" in region_cols:
             rows = db.execute(text("SELECT id, customer_id, region_name, region_code, status FROM regions")).all()
@@ -153,9 +190,12 @@ def db_diagnostics(reseed: bool = False, db: Session = Depends(get_db)):
             "tables": tables,
             "users_columns": user_cols,
             "region_columns": region_cols,
+            "zone_columns": zone_cols,
+            "ward_columns": ward_cols,
             "audit_columns": audit_cols,
             "regions": regions_data,
             "admin_user_exists": has_admin,
+            "admin_info": admin_info,
         }
     except Exception as e:
         return {"status": "error", "error": str(e), "startup_error": startup_error}

@@ -77,6 +77,9 @@ class Ward(Base, TimestampMixin):
     zone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("zones.id", ondelete="RESTRICT"), nullable=False
     )
+    region_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("regions.id", ondelete="RESTRICT"), nullable=True
+    )
     ward_name: Mapped[str] = mapped_column(String(200), nullable=False)
     ward_number: Mapped[str] = mapped_column(String(64), nullable=False)
     ward_code: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -88,5 +91,6 @@ class Ward(Base, TimestampMixin):
         UniqueConstraint("zone_id", "ward_number", name="uq_wards_zone_ward_number"),
         UniqueConstraint("zone_id", "ward_code", name="uq_wards_zone_ward_code"),
         Index("ix_wards_zone_id", "zone_id"),
+        Index("ix_wards_region_id", "region_id"),
     )
 

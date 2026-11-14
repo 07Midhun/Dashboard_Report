@@ -119,6 +119,12 @@ def seed_initial_data(db: Session) -> None:
             )
             db.add(admin)
         db.commit()
+    else:
+        if admin.status != "active":
+            admin.status = "active"
+        if not verify_password(settings.seed_admin_password, admin.password_hash):
+            admin.password_hash = hash_password(settings.seed_admin_password)
+        db.commit()
 
     # 2. Seed initial Customer, Regions, Zones, and Wards
     bbmp_customer: Customer | None = None
@@ -197,6 +203,7 @@ def seed_initial_data(db: Session) -> None:
                         db.add(
                             Ward(
                                 zone_id=zone.id,
+                                region_id=region.id,
                                 ward_name=ward_name,
                                 ward_number=w_code,
                                 ward_code=w_code,
@@ -243,6 +250,12 @@ def seed_initial_data(db: Session) -> None:
                 status="active",
             )
             db.add(customer_user)
+        db.flush()
+    else:
+        if customer_user.status != "active":
+            customer_user.status = "active"
+        if not verify_password(settings.seed_customer_user_password, customer_user.password_hash):
+            customer_user.password_hash = hash_password(settings.seed_customer_user_password)
         db.flush()
 
     if bbmp_customer is not None:

@@ -3,7 +3,7 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String,
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database.base import Base, utcnow
+from app.database.base import Base, JSONType, utcnow
 
 
 class ReportFile(Base):
@@ -219,7 +219,7 @@ class ProcessingLog(Base):
     unknown_lamp_type_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     empty_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     final_merged_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    warnings_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
+    warnings_json: Mapped[list | dict | None] = mapped_column(JSONType, nullable=True)
     processing_status: Mapped[str] = mapped_column(String(32), nullable=False)  # success | warning | failed
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

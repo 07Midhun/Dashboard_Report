@@ -188,6 +188,8 @@ CREATE TABLE IF NOT EXISTS user_customer_permissions (
 
 def auto_heal_schema(engine: Engine) -> None:
     """Executes safe idempotent schema patches before metadata.create_all."""
+    if engine.dialect.name != "postgresql":
+        return
     try:
         with engine.begin() as conn:
             for statement in SCHEMA_PATCH_SQL.strip().split(";"):

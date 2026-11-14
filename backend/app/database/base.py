@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
-from sqlalchemy import DateTime, MetaData
+from sqlalchemy import DateTime, JSON, MetaData
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+JSONType = JSONB().with_variant(JSON(), "sqlite")
 
 
 NAMING_CONVENTION = {

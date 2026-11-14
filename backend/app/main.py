@@ -99,14 +99,17 @@ def db_diagnostics(db: Session = Depends(get_db)):
         user_cols = db.execute(
             text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
         ).scalars().all()
-        admin_count = db.execute(
-            text("SELECT count(*) FROM users WHERE lower(email) = 'admin@gmail.com'")
-        ).scalar()
+        has_admin = False
+        if "email" in user_cols:
+            admin_count = db.execute(
+                text("SELECT count(*) FROM users WHERE lower(email) = 'admin@gmail.com'")
+            ).scalar()
+            has_admin = (admin_count or 0) > 0
         return {
             "status": "ok",
             "tables": tables,
             "users_columns": user_cols,
-            "admin_user_exists": (admin_count or 0) > 0,
+            "admin_user_exists": has_admin,
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}

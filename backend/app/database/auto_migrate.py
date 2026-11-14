@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(150) DEFAULT 'Administrator';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(32) DEFAULT 'admin';
@@ -27,6 +28,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+UPDATE users SET email = COALESCE(username, 'admin') || '@schnell.local' WHERE email IS NULL;
 
 -- Ensure customers table has all required columns
 CREATE TABLE IF NOT EXISTS customers (
@@ -107,3 +110,4 @@ def auto_heal_schema(engine: Engine) -> None:
         logger.info("Database schema auto-heal completed successfully.")
     except Exception as exc:
         logger.warning("Database schema auto-heal notice: %s", exc)
+

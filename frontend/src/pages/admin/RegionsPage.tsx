@@ -16,10 +16,12 @@ export function RegionsPage() {
   const [regions, setRegions] = useState<Region[]>([]);
   const [selectedCustId, setSelectedCustId] = useState<number | "">("");
   const [newName, setNewName] = useState("");
+  const [newCode, setNewCode] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [editing, setEditing] = useState<Region | null>(null);
   const [editName, setEditName] = useState("");
+  const [editCode, setEditCode] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Region | null>(null);
 
   const loadData = useCallback(async () => {
@@ -52,9 +54,11 @@ export function RegionsPage() {
       await hierarchyApi.createRegion({
         customer_id: Number(selectedCustId),
         region_name: newName.trim(),
+        region_code: newCode.trim() ? newCode.trim().toUpperCase() : undefined,
         status: "active",
       });
       setNewName("");
+      setNewCode("");
       showToast("success", "Region Created");
       await Promise.all([loadData(), refreshTree()]);
     } catch (err) {
@@ -65,8 +69,12 @@ export function RegionsPage() {
   const handleSaveEdit = async () => {
     if (!editing || !editName.trim()) return;
     try {
-      await hierarchyApi.updateRegion(editing.id, { region_name: editName.trim() });
+      await hierarchyApi.updateRegion(editing.id, {
+        region_name: editName.trim(),
+        region_code: editCode.trim() ? editCode.trim().toUpperCase() : undefined,
+      });
       setEditing(null);
+      setEditCode("");
       showToast("success", "Region Updated");
       await Promise.all([loadData(), refreshTree()]);
     } catch (err) {
@@ -132,7 +140,7 @@ export function RegionsPage() {
           </select>
         </div>
 
-        <div className="flex-1 min-w-[220px]">
+        <div className="flex-1 min-w-[180px]">
           <label className="mb-1.5 block text-xs font-semibold text-[#173042]">
             New Region Name
           </label>
@@ -140,7 +148,20 @@ export function RegionsPage() {
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. SOUTH or MAHADEVAPURA"
+            placeholder="e.g. SOUTH or EAST"
+            className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-[#173042]"
+          />
+        </div>
+
+        <div className="w-full sm:w-44">
+          <label className="mb-1.5 block text-xs font-semibold text-[#173042]">
+            Region Code <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
+            placeholder="Auto or e.g. EAST"
             className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm text-[#173042]"
           />
         </div>
@@ -170,6 +191,7 @@ export function RegionsPage() {
               <thead className="bg-slate-50 text-[#718096]">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Region Name</th>
+                  <th className="px-4 py-3 font-semibold">Code</th>
                   <th className="px-4 py-3 font-semibold">Customer</th>
                   <th className="px-4 py-3 font-semibold text-center">Zones</th>
                   <th className="px-4 py-3 font-semibold text-center">Wards</th>
@@ -188,7 +210,15 @@ export function RegionsPage() {
                             type="text"
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Name"
                             className="rounded-lg border border-teal-300 px-2.5 py-1 text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={editCode}
+                            onChange={(e) => setEditCode(e.target.value)}
+                            placeholder="Code"
+                            className="rounded-lg border border-teal-300 px-2 py-1 text-xs w-20"
                           />
                           <button
                             type="button"
@@ -199,7 +229,10 @@ export function RegionsPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setEditing(null)}
+                            onClick={() => {
+                              setEditing(null);
+                              setEditCode("");
+                            }}
                             className="text-slate-500 hover:underline"
                           >
                             Cancel
@@ -208,6 +241,11 @@ export function RegionsPage() {
                       ) : (
                         reg.region_name
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
+                        {reg.region_code || "—"}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-[#718096]">{reg.customer_name}</td>
                     <td className="px-4 py-3 text-center font-bold text-[#075D6B]">
@@ -227,6 +265,7 @@ export function RegionsPage() {
                           onClick={() => {
                             setEditing(reg);
                             setEditName(reg.region_name);
+                            setEditCode(reg.region_code || "");
                           }}
                           className="rounded-lg border border-slate-200 p-1.5 text-slate-600 hover:bg-slate-100"
                         >

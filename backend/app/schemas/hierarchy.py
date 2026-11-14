@@ -31,11 +31,13 @@ class CustomerOut(BaseModel):
 class RegionCreate(BaseModel):
     customer_id: int
     region_name: str = Field(..., min_length=2, max_length=200)
+    region_code: str | None = Field(default=None, max_length=32)
     status: StatusLiteral = "active"
 
 
 class RegionUpdate(BaseModel):
     region_name: str | None = Field(default=None, min_length=2, max_length=200)
+    region_code: str | None = Field(default=None, max_length=32)
     status: StatusLiteral | None = None
 
 
@@ -44,6 +46,7 @@ class RegionOut(BaseModel):
     customer_id: int
     customer_name: str
     region_name: str
+    region_code: str
     status: str
     zones_count: int = 0
     wards_count: int = 0
@@ -146,6 +149,7 @@ class HierarchyRegionNode(BaseModel):
     id: int
     customer_id: int
     region_name: str
+    region_code: str | None = None
     status: str
     zones_count: int
     wards_count: int = 0

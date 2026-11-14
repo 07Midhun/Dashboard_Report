@@ -73,6 +73,7 @@ export const hierarchyApi = {
   createRegion: async (payload: {
     customer_id: number;
     region_name: string;
+    region_code?: string;
     status: string;
   }): Promise<Region> => {
     const { data } = await api.post<Region>("/regions", payload);
@@ -80,7 +81,7 @@ export const hierarchyApi = {
   },
   updateRegion: async (
     id: number,
-    payload: { region_name?: string; status?: string }
+    payload: { region_name?: string; region_code?: string; status?: string }
   ): Promise<Region> => {
     const { data } = await api.put<Region>(`/regions/${id}`, payload);
     return data;

@@ -44,6 +44,7 @@ export interface Region {
   customer_id: number;
   customer_name: string;
   region_name: string;
+  region_code?: string;
   status: EntityStatus;
   zones_count: number;
   wards_count: number;
@@ -118,6 +119,7 @@ export interface HierarchyRegionNode {
   id: number;
   customer_id: number;
   region_name: string;
+  region_code?: string;
   status: EntityStatus;
   zones_count: number;
   wards_count: number;

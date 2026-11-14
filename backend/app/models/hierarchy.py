@@ -27,6 +27,7 @@ class Region(Base, TimestampMixin):
         Integer, ForeignKey("customers.id", ondelete="RESTRICT"), nullable=False
     )
     region_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    region_code: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
     customer: Mapped["Customer"] = relationship(back_populates="regions")
@@ -37,6 +38,7 @@ class Region(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("customer_id", "region_name", name="uq_regions_customer_region_name"),
         Index("ix_regions_customer_id", "customer_id"),
+        Index("ix_regions_region_code", "region_code"),
     )
 
 

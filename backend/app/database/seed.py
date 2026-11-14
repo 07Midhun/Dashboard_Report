@@ -12,6 +12,21 @@ def _ward_range(start: int, end: int) -> list[str]:
     return [f"W{n}" for n in range(start, end + 1)]
 
 
+DEFAULT_REGION_CODES = {
+    "BOMMANAHALLI": "BMH",
+    "EAST": "EAST",
+}
+
+
+def get_default_region_code(name: str) -> str:
+    cleaned = (name or "").strip()
+    upper = cleaned.upper()
+    if upper in DEFAULT_REGION_CODES:
+        return DEFAULT_REGION_CODES[upper]
+    alphanumeric = "".join(c for c in upper if c.isalnum())
+    return alphanumeric[:10] if alphanumeric else "REG"
+
+
 INITIAL_HIERARCHY = {
     "Bangalore (BBMP)": {
         "BOMMANAHALLI": [
@@ -117,20 +132,31 @@ def seed_initial_data(db: Session) -> None:
             bbmp_customer = customer
 
         for region_name, zones_list in regions_map.items():
+            expected_code = get_default_region_code(region_name)
             region = db.scalar(
                 select(Region).where(
                     or_(
                         Region.customer_id == customer.id,
                         Region.customer_id.is_(None),
                     ),
-                    func.upper(Region.region_name) == region_name.upper(),
+                    or_(
+                        func.upper(Region.region_name) == region_name.upper(),
+                        func.upper(Region.region_code) == expected_code.upper(),
+                    ),
                 )
             )
             if region is not None:
                 if region.customer_id is None:
                     region.customer_id = customer.id
+                if not region.region_code:
+                    region.region_code = expected_code
             else:
-                region = Region(customer_id=customer.id, region_name=region_name, status="active")
+                region = Region(
+                    customer_id=customer.id,
+                    region_name=region_name,
+                    region_code=expected_code,
+                    status="active",
+                )
                 db.add(region)
                 db.flush()
 

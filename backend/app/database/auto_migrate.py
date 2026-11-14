@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS regions (
     id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES customers(id) ON DELETE RESTRICT,
     region_name VARCHAR(200) NOT NULL,
+    region_code VARCHAR(32) NOT NULL DEFAULT '',
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -57,13 +58,16 @@ CREATE TABLE IF NOT EXISTS regions (
 
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS customer_id INTEGER;
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS region_name VARCHAR(200);
+ALTER TABLE regions ADD COLUMN IF NOT EXISTS region_code VARCHAR(32);
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active';
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
--- Drop obsolete single-column unique constraint on region_name if present
+-- Drop obsolete single-column unique constraints if present
 ALTER TABLE regions DROP CONSTRAINT IF EXISTS regions_region_name_key;
 ALTER TABLE regions DROP CONSTRAINT IF EXISTS uq_regions_region_name;
+ALTER TABLE regions DROP CONSTRAINT IF EXISTS regions_region_code_key;
+ALTER TABLE regions DROP CONSTRAINT IF EXISTS uq_regions_region_code;
 
 -- Ensure default customer exists and link orphaned regions
 INSERT INTO customers (customer_name, status, created_at, updated_at)
@@ -73,6 +77,25 @@ ON CONFLICT (customer_name) DO NOTHING;
 UPDATE regions 
 SET customer_id = (SELECT id FROM customers WHERE customer_name = 'Bangalore (BBMP)' LIMIT 1)
 WHERE customer_id IS NULL;
+
+-- Safe backfill for existing regions with NULL or empty region_code
+UPDATE regions 
+SET region_code = 'BMH' 
+WHERE (region_code IS NULL OR region_code = '') 
+  AND UPPER(region_name) LIKE '%BOMMANAHALLI%';
+
+UPDATE regions 
+SET region_code = 'EAST' 
+WHERE (region_code IS NULL OR region_code = '') 
+  AND UPPER(region_name) LIKE '%EAST%';
+
+UPDATE regions 
+SET region_code = UPPER(SUBSTRING(REGEXP_REPLACE(region_name, '[^a-zA-Z0-9]', '', 'g') FROM 1 FOR 10)) 
+WHERE region_code IS NULL OR region_code = '';
+
+UPDATE regions 
+SET region_code = 'REG' || id 
+WHERE region_code IS NULL OR region_code = '';
 
 -- Ensure zones table
 CREATE TABLE IF NOT EXISTS zones (

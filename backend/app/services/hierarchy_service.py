@@ -33,6 +33,21 @@ def _ward_sort_key(ward: Ward) -> tuple[tuple[int, int | str], ...]:
     return tuple((0, int(p)) if p.isdigit() else (1, p) for p in parts if p)
 
 
+DEFAULT_REGION_CODE_MAP = {
+    "BOMMANAHALLI": "BMH",
+    "EAST": "EAST",
+}
+
+
+def derive_region_code(name: str) -> str:
+    cleaned = (name or "").strip()
+    upper = cleaned.upper()
+    if upper in DEFAULT_REGION_CODE_MAP:
+        return DEFAULT_REGION_CODE_MAP[upper]
+    alphanumeric = re.sub(r"[^A-Za-z0-9]", "", upper)
+    return alphanumeric[:10] if alphanumeric else "REG"
+
+
 def _normalize_zone_code(code: str | None) -> str | None:
     if code is None:
         return None
@@ -253,6 +268,7 @@ def list_regions(db: Session, auth: AuthContext, customer_id: int | None = None)
                 customer_id=reg.customer_id,
                 customer_name=reg.customer.customer_name,
                 region_name=reg.region_name,
+                region_code=reg.region_code,
                 status=reg.status,
                 zones_count=zones_count,
                 wards_count=wards_count,
@@ -282,7 +298,43 @@ def create_region(db: Session, payload: RegionCreate, user_id: int, ip: str | No
             detail=f"Region '{name}' already exists under {cust.customer_name}.",
         )
 
-    reg = Region(customer_id=payload.customer_id, region_name=name, status=payload.status)
+    code = (payload.region_code or "").strip().upper()
+    if not code:
+        code = derive_region_code(name)
+
+    dup_code = db.scalar(
+        select(Region).where(
+            Region.customer_id == payload.customer_id,
+            func.upper(Region.region_code) == code.upper(),
+        )
+    )
+    if dup_code is not None:
+        if payload.region_code:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Region code '{code}' already exists under {cust.customer_name}.",
+            )
+        suffix = 1
+        base_code = code[:8]
+        while dup_code is not None and suffix < 100:
+            candidate = f"{base_code}{suffix}"
+            dup_code = db.scalar(
+                select(Region).where(
+                    Region.customer_id == payload.customer_id,
+                    func.upper(Region.region_code) == candidate.upper(),
+                )
+            )
+            if dup_code is None:
+                code = candidate
+                break
+            suffix += 1
+
+    reg = Region(
+        customer_id=payload.customer_id,
+        region_name=name,
+        region_code=code,
+        status=payload.status,
+    )
     db.add(reg)
     db.flush()
     record_audit_log(
@@ -291,7 +343,11 @@ def create_region(db: Session, payload: RegionCreate, user_id: int, ip: str | No
         action="region.create",
         entity_type="region",
         entity_id=reg.id,
-        details={"customer_id": reg.customer_id, "region_name": reg.region_name},
+        details={
+            "customer_id": reg.customer_id,
+            "region_name": reg.region_name,
+            "region_code": reg.region_code,
+        },
         ip_address=ip,
     )
     db.commit()
@@ -301,6 +357,7 @@ def create_region(db: Session, payload: RegionCreate, user_id: int, ip: str | No
         customer_id=reg.customer_id,
         customer_name=cust.customer_name,
         region_name=reg.region_name,
+        region_code=reg.region_code,
         status=reg.status,
         created_at=reg.created_at,
         updated_at=reg.updated_at,
@@ -332,6 +389,24 @@ def update_region(
             )
         reg.region_name = name
 
+    if payload.region_code is not None:
+        code = payload.region_code.strip().upper()
+        if not code:
+            code = derive_region_code(reg.region_name)
+        dup_code = db.scalar(
+            select(Region).where(
+                Region.customer_id == reg.customer_id,
+                func.upper(Region.region_code) == code.upper(),
+                Region.id != region_id,
+            )
+        )
+        if dup_code is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Region code '{code}' already exists under this customer.",
+            )
+        reg.region_code = code
+
     if payload.status is not None:
         reg.status = payload.status
 
@@ -341,7 +416,11 @@ def update_region(
         action="region.update",
         entity_type="region",
         entity_id=reg.id,
-        details={"region_name": reg.region_name, "status": reg.status},
+        details={
+            "region_name": reg.region_name,
+            "region_code": reg.region_code,
+            "status": reg.status,
+        },
         ip_address=ip,
     )
     db.commit()
@@ -362,6 +441,7 @@ def update_region(
         customer_id=reg.customer_id,
         customer_name=reg.customer.customer_name,
         region_name=reg.region_name,
+        region_code=reg.region_code,
         status=reg.status,
         zones_count=zones_count,
         wards_count=wards_count,
@@ -1075,6 +1155,7 @@ def get_hierarchy_tree(db: Session, auth: AuthContext) -> list[HierarchyCustomer
                     id=reg.id,
                     customer_id=reg.customer_id,
                     region_name=reg.region_name,
+                    region_code=reg.region_code,
                     status=reg.status,
                     zones_count=len(zone_nodes),
                     wards_count=region_wards_count,

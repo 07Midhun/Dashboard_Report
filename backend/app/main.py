@@ -29,9 +29,12 @@ from app.api.routes import (
 from app.core.config import settings
 from app.database.session import get_db
 
+startup_error: str | None = None
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    global startup_error
     settings.storage_root.mkdir(parents=True, exist_ok=True)
     settings.temp_processing_dir.mkdir(parents=True, exist_ok=True)
 
@@ -53,6 +56,7 @@ async def lifespan(_: FastAPI):
             with SessionLocal() as db:
                 seed_initial_data(db)
     except Exception as exc:
+        startup_error = str(exc)
         print(f"Startup database initialization error: {exc}")
 
     yield
@@ -63,6 +67,17 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    import traceback
+    tb = traceback.format_exc()
+    print(f"Unhandled error on {request.method} {request.url.path}: {tb}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{exc.__class__.__name__}: {str(exc)}"},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,20 +114,34 @@ def db_diagnostics(db: Session = Depends(get_db)):
         user_cols = db.execute(
             text("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
         ).scalars().all()
+        region_cols = db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'regions'")
+        ).scalars().all()
+        audit_cols = db.execute(
+            text("SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_logs'")
+        ).scalars().all()
         has_admin = False
         if "email" in user_cols:
             admin_count = db.execute(
                 text("SELECT count(*) FROM users WHERE lower(email) = 'admin@gmail.com'")
             ).scalar()
             has_admin = (admin_count or 0) > 0
+        regions_data = []
+        if "region_name" in region_cols:
+            rows = db.execute(text("SELECT id, customer_id, region_name, region_code, status FROM regions")).all()
+            regions_data = [{"id": r[0], "customer_id": r[1], "region_name": r[2], "region_code": r[3], "status": r[4]} for r in rows]
         return {
             "status": "ok",
+            "startup_error": startup_error,
             "tables": tables,
             "users_columns": user_cols,
+            "region_columns": region_cols,
+            "audit_columns": audit_cols,
+            "regions": regions_data,
             "admin_user_exists": has_admin,
         }
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": str(e), "startup_error": startup_error}
 
 
 app.include_router(auth.router, prefix="/api")

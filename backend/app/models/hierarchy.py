@@ -28,6 +28,12 @@ class Region(Base, TimestampMixin):
     )
     region_name: Mapped[str] = mapped_column(String(200), nullable=False)
     region_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    corporation: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="BBMP", server_default="BBMP"
+    )
+    division: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, default="", server_default=""
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
 
     customer: Mapped["Customer"] = relationship(back_populates="regions")

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base, TimestampMixin, utcnow
@@ -15,6 +15,7 @@ class User(Base, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="customer")  # admin | customer
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")  # active | inactive
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=True, default=True, server_default="true")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     customer_permissions: Mapped[list["UserCustomerPermission"]] = relationship(

@@ -25,12 +25,16 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(32) DEFAULT 'admin';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE users ALTER COLUMN is_active SET DEFAULT true;
+ALTER TABLE users ALTER COLUMN is_active DROP NOT NULL;
 
 UPDATE users SET email = COALESCE(username, 'admin') || '@schnell.local' WHERE email IS NULL;
 UPDATE users SET status = 'active' WHERE status IS NULL;
+UPDATE users SET is_active = true WHERE is_active IS NULL;
 UPDATE users SET role = 'admin' WHERE email = 'admin@gmail.com';
 
 -- Ensure customers table has all required columns

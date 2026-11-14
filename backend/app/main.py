@@ -72,6 +72,7 @@ app = FastAPI(
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     import traceback
+
     tb = traceback.format_exc()
     print(f"Unhandled error on {request.method} {request.url.path}: {tb}")
     return JSONResponse(
@@ -106,7 +107,22 @@ def health_check(db: Session = Depends(get_db)) -> dict[str, str]:
 
 
 @app.get("/api/db-diagnostics", tags=["Diagnostics"])
-def db_diagnostics(db: Session = Depends(get_db)):
+def db_diagnostics(reseed: bool = False, db: Session = Depends(get_db)):
+    global startup_error
+    reseed_result = None
+    if reseed:
+        try:
+            from app.database.auto_migrate import auto_heal_schema
+            from app.database.seed import seed_initial_data
+            from app.database.session import engine
+            auto_heal_schema(engine)
+            seed_initial_data(db)
+            startup_error = None
+            reseed_result = "success"
+        except Exception as err:
+            startup_error = str(err)
+            reseed_result = f"failed: {err}"
+
     try:
         tables = db.execute(
             text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
@@ -132,6 +148,7 @@ def db_diagnostics(db: Session = Depends(get_db)):
             regions_data = [{"id": r[0], "customer_id": r[1], "region_name": r[2], "region_code": r[3], "status": r[4]} for r in rows]
         return {
             "status": "ok",
+            "reseed_result": reseed_result,
             "startup_error": startup_error,
             "tables": tables,
             "users_columns": user_cols,

@@ -333,6 +333,8 @@ def create_region(db: Session, payload: RegionCreate, user_id: int, ip: str | No
         customer_id=payload.customer_id,
         region_name=name,
         region_code=code,
+        corporation="BBMP",
+        division="",
         status=payload.status,
     )
     db.add(reg)

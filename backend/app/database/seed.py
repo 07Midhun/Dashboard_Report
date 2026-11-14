@@ -155,6 +155,8 @@ def seed_initial_data(db: Session) -> None:
                     customer_id=customer.id,
                     region_name=region_name,
                     region_code=expected_code,
+                    corporation="BBMP",
+                    division="",
                     status="active",
                 )
                 db.add(region)

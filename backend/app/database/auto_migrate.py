@@ -171,6 +171,7 @@ ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS entity_id VARCHAR(64);
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details JSONB;
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(64);
 ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE audit_logs ALTER COLUMN entity_id TYPE VARCHAR(64) USING entity_id::VARCHAR;
 
 -- Ensure revoked_tokens table
 CREATE TABLE IF NOT EXISTS revoked_tokens (
@@ -249,13 +250,14 @@ def auto_heal_schema(engine: Engine) -> None:
     """Executes safe idempotent schema patches before metadata.create_all."""
     if engine.dialect.name != "postgresql":
         return
-    try:
-        with engine.begin() as conn:
-            for statement in SCHEMA_PATCH_SQL.strip().split(";"):
-                stmt = statement.strip()
-                if stmt:
-                    conn.execute(text(stmt))
-        logger.info("Database schema auto-heal completed successfully.")
-    except Exception as exc:
-        logger.warning("Database schema auto-heal notice: %s", exc)
+    for statement in SCHEMA_PATCH_SQL.strip().split(";"):
+        stmt = statement.strip()
+        if not stmt:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as exc:
+            logger.debug("Database schema statement notice (%s...): %s", stmt[:40], exc)
+    logger.info("Database schema auto-heal completed.")
 

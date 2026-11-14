@@ -144,6 +144,7 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active';
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE wards ALTER COLUMN region_id DROP NOT NULL;
+ALTER TABLE wards DROP CONSTRAINT IF EXISTS uq_region_ward_number;
 UPDATE wards SET ward_number = ward_code WHERE ward_number IS NULL;
 UPDATE wards w SET region_id = z.region_id FROM zones z WHERE w.zone_id = z.id AND w.region_id IS NULL;
 

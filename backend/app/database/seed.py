@@ -196,12 +196,13 @@ def seed_initial_data(db: Session) -> None:
                 db.flush()
 
             for zone_name, zone_code, ward_codes in zones_list:
-                zone = db.scalar(
-                    select(Zone).where(
-                        Zone.region_id == region.id,
-                        func.upper(Zone.zone_name) == zone_name.upper(),
-                    )
-                )
+                clean_zone_key = "".join(c for c in zone_name.upper() if c.isalnum())
+                zone = None
+                for existing_z in db.scalars(select(Zone).where(Zone.region_id == region.id)).all():
+                    existing_z_clean = "".join(c for c in existing_z.zone_name.upper() if c.isalnum())
+                    if existing_z_clean == clean_zone_key or (zone_code and existing_z.zone_code and existing_z.zone_code.upper() == zone_code.upper()):
+                        zone = existing_z
+                        break
                 if zone is None:
                     zone = Zone(
                         region_id=region.id,
@@ -211,14 +212,16 @@ def seed_initial_data(db: Session) -> None:
                     )
                     db.add(zone)
                     db.flush()
-                elif not zone.zone_code:
+                elif not zone.zone_code and zone_code:
                     zone.zone_code = zone_code
 
                 for w_code in ward_codes:
                     existing_ward = db.scalar(
                         select(Ward).where(
-                            Ward.zone_id == zone.id,
-                            Ward.ward_number == w_code,
+                            or_(
+                                and_(Ward.zone_id == zone.id, func.upper(Ward.ward_number) == w_code.upper()),
+                                and_(Ward.region_id == region.id, func.upper(Ward.ward_number) == w_code.upper()),
+                            )
                         )
                     )
                     if existing_ward is None:
@@ -237,6 +240,15 @@ def seed_initial_data(db: Session) -> None:
                                 status="active",
                             )
                         )
+                    else:
+                        if existing_ward.zone_id != zone.id:
+                            existing_ward.zone_id = zone.id
+                        if existing_ward.region_id != region.id:
+                            existing_ward.region_id = region.id
+                        if not existing_ward.ward_code:
+                            existing_ward.ward_code = w_code
+                        if existing_ward.status != "active":
+                            existing_ward.status = "active"
 
     # 3. Seed sample Customer user linked to Bangalore (BBMP) (or migrate legacy starter seed account)
     cust_email = settings.seed_customer_user_email.strip().lower()

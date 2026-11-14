@@ -29,7 +29,7 @@ from app.services.audit_service import record_audit_log
 from app.services.excel_reader_service import inspect_workbook
 from app.services.excel_writer_service import write_merged_workbook
 from app.services.hierarchy_service import validate_ward_hierarchy
-from app.services.led_classifier_service import LedClassifier, RuleSpec
+from app.services.led_classifier_service import DEFAULT_RULES, LedClassifier, RuleSpec
 from app.services.reconciliation_engine import (
     MappingSpec,
     ReconciliationValidationError,
@@ -405,14 +405,12 @@ def generate_merged_report(
     active_rules = db.scalars(
         select(LedClassificationRule).where(LedClassificationRule.is_active.is_(True))
     ).all()
-    classifier = LedClassifier(
-        [
-            RuleSpec(r.pattern, r.match_type, r.classification)
-            for r in active_rules
-        ]
-        if active_rules
-        else None
-    )
+    rule_map = {(r.pattern.strip().upper(), r.match_type): r for r in DEFAULT_RULES}
+    for r in active_rules:
+        rule_map[(r.pattern.strip().upper(), r.match_type)] = RuleSpec(
+            r.pattern, r.match_type, r.classification
+        )
+    classifier = LedClassifier(list(rule_map.values()))
 
     survey_map_spec = MappingSpec(
         pole_number_col=payload.pole_survey_mapping.pole_number_col,

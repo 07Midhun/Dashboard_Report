@@ -184,6 +184,60 @@ CREATE TABLE IF NOT EXISTS user_customer_permissions (
     access_level VARCHAR(32) NOT NULL DEFAULT 'read_only',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Ensure led_classification_rules table has unique constraint on pattern and match_type
+CREATE TABLE IF NOT EXISTS led_classification_rules (
+    id SERIAL PRIMARY KEY,
+    pattern VARCHAR(120) NOT NULL,
+    match_type VARCHAR(32) NOT NULL DEFAULT 'contains',
+    classification VARCHAR(32) NOT NULL DEFAULT 'led',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Seed FL LED and non-LED combinations directly if not existing
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'FL LED', 'contains', 'led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'LED,LED', 'contains', 'led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'led,led' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'FL LED,LED', 'contains', 'led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led,led' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'LED,FL LED', 'contains', 'led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'led,fl led' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'FL LED,FL LED', 'contains', 'led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led,fl led' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'TUBELIGHT', 'contains', 'non_led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tubelight' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'TUBE LIGHT', 'contains', 'non_led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tube light' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'SVL,TUBELIGHT', 'contains', 'non_led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'svl,tubelight' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'SVL,SVL', 'contains', 'non_led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'svl,svl' AND match_type = 'contains');
+
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
+SELECT 'TUBELIGHT,SVL', 'contains', 'non_led', true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tubelight,svl' AND match_type = 'contains');
+
 """
 
 

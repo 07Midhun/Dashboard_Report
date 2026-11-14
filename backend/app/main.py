@@ -183,6 +183,10 @@ def db_diagnostics(reseed: bool = False, db: Session = Depends(get_db)):
         if "region_name" in region_cols:
             rows = db.execute(text("SELECT id, customer_id, region_name, region_code, status FROM regions")).all()
             regions_data = [{"id": r[0], "customer_id": r[1], "region_name": r[2], "region_code": r[3], "status": r[4]} for r in rows]
+        rules_data = []
+        if "led_classification_rules" in tables:
+            r_rows = db.execute(text("SELECT pattern, match_type, classification, is_active FROM led_classification_rules ORDER BY id ASC")).all()
+            rules_data = [{"pattern": r[0], "match_type": r[1], "classification": r[2], "is_active": r[3]} for r in r_rows]
         return {
             "status": "ok",
             "reseed_result": reseed_result,
@@ -196,6 +200,7 @@ def db_diagnostics(reseed: bool = False, db: Session = Depends(get_db)):
             "regions": regions_data,
             "admin_user_exists": has_admin,
             "admin_info": admin_info,
+            "led_rules": rules_data,
         }
     except Exception as e:
         return {"status": "error", "error": str(e), "startup_error": startup_error}

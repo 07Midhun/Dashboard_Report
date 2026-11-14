@@ -61,6 +61,19 @@ ALTER TABLE regions ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'active'
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 ALTER TABLE regions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
+-- Drop obsolete single-column unique constraint on region_name if present
+ALTER TABLE regions DROP CONSTRAINT IF EXISTS regions_region_name_key;
+ALTER TABLE regions DROP CONSTRAINT IF EXISTS uq_regions_region_name;
+
+-- Ensure default customer exists and link orphaned regions
+INSERT INTO customers (customer_name, status, created_at, updated_at)
+VALUES ('Bangalore (BBMP)', 'active', NOW(), NOW())
+ON CONFLICT (customer_name) DO NOTHING;
+
+UPDATE regions 
+SET customer_id = (SELECT id FROM customers WHERE customer_name = 'Bangalore (BBMP)' LIMIT 1)
+WHERE customer_id IS NULL;
+
 -- Ensure zones table
 CREATE TABLE IF NOT EXISTS zones (
     id SERIAL PRIMARY KEY,

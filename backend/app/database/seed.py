@@ -103,7 +103,7 @@ def seed_initial_data(db: Session) -> None:
                 status="active",
             )
             db.add(admin)
-        db.flush()
+        db.commit()
 
     # 2. Seed initial Customer, Regions, Zones, and Wards
     bbmp_customer: Customer | None = None
@@ -119,11 +119,17 @@ def seed_initial_data(db: Session) -> None:
         for region_name, zones_list in regions_map.items():
             region = db.scalar(
                 select(Region).where(
-                    Region.customer_id == customer.id,
-                    Region.region_name == region_name,
+                    or_(
+                        Region.customer_id == customer.id,
+                        Region.customer_id.is_(None),
+                    ),
+                    func.upper(Region.region_name) == region_name.upper(),
                 )
             )
-            if region is None:
+            if region is not None:
+                if region.customer_id is None:
+                    region.customer_id = customer.id
+            else:
                 region = Region(customer_id=customer.id, region_name=region_name, status="active")
                 db.add(region)
                 db.flush()
@@ -132,7 +138,7 @@ def seed_initial_data(db: Session) -> None:
                 zone = db.scalar(
                     select(Zone).where(
                         Zone.region_id == region.id,
-                        Zone.zone_name == zone_name,
+                        func.upper(Zone.zone_name) == zone_name.upper(),
                     )
                 )
                 if zone is None:

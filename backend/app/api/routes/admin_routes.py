@@ -211,3 +211,46 @@ async def sync_storage_zip(
     return {"status": "ok", "files_extracted": extracted_count}
 
 
+@router.post("/storage-remap-hierarchy")
+def remap_storage_hierarchy(
+    db: Session = Depends(get_db),
+    _: AuthContext = Depends(require_admin),
+):
+    storage_root = storage_service.root
+
+    # Map by zone code (BMH, CVRN, HEB, PN, SN, SNTR, SVJR)
+    code_to_render_dest = {}
+    render_zones = db.query(Zone).all()
+    for z in render_zones:
+        if z.zone_code:
+            code_to_render_dest[z.zone_code.strip().upper()] = (z.customer_id, z.region_id, z.id)
+
+    # Source zones from local storage
+    local_source_zones = {
+        "BMH": (1, 1, 1),
+        "CVRN": (1, 2, 2),
+        "HEB": (1, 2, 3),
+        "PN": (1, 2, 4),
+        "SN": (1, 2, 5),
+        "SNTR": (1, 2, 6),
+        "SVJR": (1, 2, 7),
+    }
+
+    copied_wards = 0
+    for code, (src_c, src_r, src_z) in local_source_zones.items():
+        if code in code_to_render_dest:
+            dst_c, dst_r, dst_z = code_to_render_dest[code]
+            src_dir = storage_root / "customers" / str(src_c) / "regions" / str(src_r) / "zones" / str(src_z) / "wards"
+            dst_dir = storage_root / "customers" / str(dst_c) / "regions" / str(dst_r) / "zones" / str(dst_z) / "wards"
+            if src_dir.exists():
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                for ward_item in src_dir.iterdir():
+                    target_ward = dst_dir / ward_item.name
+                    if ward_item.is_dir():
+                        shutil.copytree(ward_item, target_ward, dirs_exist_ok=True)
+                        copied_wards += 1
+
+    return {"status": "ok", "wards_mapped": copied_wards}
+
+
+

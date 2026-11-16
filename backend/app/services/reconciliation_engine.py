@@ -15,6 +15,7 @@ class MappingSpec:
     pole_number_col: str
     arm_count_col: str | None = None
     lamp_type_col: str | None = None
+    lamp_id_col: str | None = None
     extra_mappings: dict[str, str] = field(default_factory=dict)  # survey_col -> lamp_col
 
 
@@ -152,8 +153,71 @@ def reconcile_reports(
     led_classifier = classifier or LedClassifier()
     warnings: list[str] = []
 
-    # Step 1: Index existing Lamp Installation records
+    # Detect key target columns in Lamp Installation workbook upfront
+    target_lamp_id_col: str | None = None
+    target_lights_empty_col: str | None = None
+    target_arm_col: str | None = None
+
+    if getattr(lamp_mapping, "lamp_id_col", None) and lamp_mapping.lamp_id_col in lamp_headers:
+        target_lamp_id_col = lamp_mapping.lamp_id_col
+
+    for h in lamp_headers:
+        norm_h = normalize_header_name(h)
+        if target_lamp_id_col is None and (
+            norm_h in {
+                "lamp id",
+                "led id",
+                "lamp_id",
+                "led_id",
+                "led lamp id",
+                "lamp id (new)",
+                "lamp id (new detail's)",
+                "lamp id (new details)",
+                "lamp id/led id",
+                "lamp id / led id",
+            }
+            or norm_h.endswith("lamp id")
+            or norm_h.endswith("led id")
+            or norm_h.startswith("lamp id")
+            or norm_h.startswith("led id")
+            or "lamp id" in norm_h
+            or "led id" in norm_h
+        ):
+            target_lamp_id_col = h
+
+        if target_lights_empty_col is None and (
+            norm_h in {
+                "light's /empty pole",
+                "lights /empty pole",
+                "light's / empty pole",
+                "lights / empty pole",
+                "lights/empty pole",
+                "light/empty pole",
+                "light's/empty pole",
+                "light / empty pole",
+                "light's /empty",
+                "lights /empty",
+                "light / empty",
+                "light/empty",
+                "empty pole",
+            }
+            or ("light" in norm_h and "empty" in norm_h)
+        ):
+            target_lights_empty_col = h
+
+        if target_arm_col is None and (
+            norm_h in {"old arm status", "arm status", "arm count", "bracket count"}
+            or "arm" in norm_h
+        ):
+            target_arm_col = h
+
+    if lamp_mapping.arm_count_col and lamp_mapping.arm_count_col in lamp_headers:
+        target_arm_col = lamp_mapping.arm_count_col
+
+    # Step 1: Index existing Lamp Installation records (supporting arm-level frequency & suffix matching)
     existing_pole_keys: set[str] = set()
+    existing_pole_counts: dict[str, int] = {}
+    existing_arm_matches: dict[str, set[int]] = {}
     existing_lamp_records: list[dict[str, Any]] = []
     lamp_blank_count = 0
 
@@ -165,6 +229,26 @@ def reconcile_reports(
             lamp_blank_count += 1
         else:
             existing_pole_keys.add(norm_key)
+            existing_pole_counts[norm_key] = existing_pole_counts.get(norm_key, 0) + 1
+
+            # Detect arm suffix in pole number (e.g. 'P002-L1' or 'P002-L2')
+            m_pole = re.search(r"-L(\d+)$", norm_key)
+            if m_pole:
+                base_k = norm_key[: m_pole.start()]
+                arm_idx = int(m_pole.group(1))
+                existing_arm_matches.setdefault(base_k, set()).add(arm_idx)
+                existing_pole_counts[base_k] = existing_pole_counts.get(base_k, 0) + 1
+                existing_pole_keys.add(base_k)
+
+        # Detect arm suffix in lamp id cell if available
+        if target_lamp_id_col and norm_key:
+            raw_lamp_id = row.get(target_lamp_id_col)
+            norm_lamp_id = normalize_pole_key(raw_lamp_id)
+            if norm_lamp_id:
+                m_lamp = re.search(r"-L(\d+)$", norm_lamp_id)
+                if m_lamp:
+                    arm_idx = int(m_lamp.group(1))
+                    existing_arm_matches.setdefault(norm_key, set()).add(arm_idx)
 
         record_out = {"_excel_row": row.get("_excel_row")}
         for col in lamp_headers:
@@ -279,56 +363,36 @@ def reconcile_reports(
             )
         )
 
-    # Step 5-7: Compare against existing Lamp Installation records without resetting L-numbers
+    # Step 5: Arm-count-based L1, L2, L3 matching and generation
+    # Output rules:
+    # 1. Pole Number column: MUST contain ONLY the original Pole Number. Never append L1, L2, or L3.
+    # 2. Lamp ID column: MUST contain the actual matched Lamp Report ID or generated POLE_NUMBER-Lk.
+    # 3. If a match is found for the Pole Number in the Lamp Report, L1 must NOT be generated or displayed.
+    # 4. Generate only remaining unmatched arm identifiers according to the arm count.
+    # 5. If no match is found, generate all identifiers corresponding to the arm count (L1..LN).
     skipped_existing_records: list[dict[str, Any]] = []
     newly_added_records: list[dict[str, Any]] = []
 
-    # Detect key target columns in Lamp Installation workbook
-    target_lamp_id_col: str | None = None
-    target_lights_empty_col: str | None = None
-    target_arm_col: str | None = None
-
-    for h in lamp_headers:
-        norm_h = normalize_header_name(h)
-        if target_lamp_id_col is None and (
-            norm_h in {"lamp id", "led id", "lamp_id", "led_id", "led lamp id", "lamp id (new)", "lamp id (new detail's)"}
-            or norm_h.endswith("lamp id")
-            or norm_h.endswith("led id")
-        ):
-            target_lamp_id_col = h
-
-        if target_lights_empty_col is None and (
-            norm_h in {
-                "light's /empty pole",
-                "lights /empty pole",
-                "light's / empty pole",
-                "lights / empty pole",
-                "lights/empty pole",
-                "light/empty pole",
-                "light's/empty pole",
-                "light / empty pole",
-                "light's /empty",
-                "lights /empty",
-                "light / empty",
-                "light/empty",
-                "empty pole",
-            }
-            or ("light" in norm_h and "empty" in norm_h)
-        ):
-            target_lights_empty_col = h
-
-        if target_arm_col is None and (
-            norm_h in {"old arm status", "arm status", "arm count", "bracket count"}
-            or "arm" in norm_h
-        ):
-            target_arm_col = h
-
-    if lamp_mapping.arm_count_col and lamp_mapping.arm_count_col in lamp_headers:
-        target_arm_col = lamp_mapping.arm_count_col
-
     for item in eligible_unique_leds:
-        generated_pole = f"{item.original_pole_number}-L{item.l_sequence}"
-        if item.normalized_pole_key in existing_pole_keys:
+        total_arms = max(1, item.l_sequence)
+        norm_k = item.normalized_pole_key
+        matched_count = existing_pole_counts.get(norm_k, 0)
+        specific_matched_arms = set(existing_arm_matches.get(norm_k, set()))
+
+        if matched_count == 0 and not specific_matched_arms:
+            # Case: Neither/none of the arms match with Lamp Report -> generate all arms L1..LN
+            unmatched_arms = list(range(1, total_arms + 1))
+        else:
+            # Case: A match was found in the Lamp Report
+            # Rule: When a match is found in the Lamp Report, L1 must not be generated or displayed.
+            matched_arms = set(specific_matched_arms)
+            if not matched_arms:
+                arms_covered = min(matched_count, total_arms)
+                matched_arms = set(range(1, arms_covered + 1))
+            # Always ensure arm 1 is marked matched when any match was found
+            matched_arms.add(1)
+            unmatched_arms = [arm_num for arm_num in range(1, total_arms + 1) if arm_num not in matched_arms]
+
             skipped_existing_records.append(
                 {
                     "excel_row": item.excel_row,
@@ -336,68 +400,75 @@ def reconcile_reports(
                     "l_sequence": item.l_sequence,
                     "arm_count": item.arm_count,
                     "lamp_type": item.lamp_type,
-                    "status": "Skipped (Already Exists in Lamp Installation)",
+                    "matched_arms_count": min(matched_count, total_arms) if matched_count else len(matched_arms),
+                    "status": "Skipped (Already Exists in Lamp Installation)"
+                    if len(unmatched_arms) == 0
+                    else "Partially Matched in Lamp Installation",
                 }
             )
-            continue
 
-        # Construct mapped row values for Lamp Installation target workbook:
-        # 1. Pole Number cell receives generated pole (e.g. GBA-SNL-W69-P2250-SP120-L2)
-        # 2. Lamp ID / LED ID cell also receives generated pole for newly added survey records
-        # 3. Light's / Empty Pole cell receives the survey LED lamp type (e.g. LED)
-        # 4. Old Arm Status cell receives the arm count (e.g. 1, 2)
         effective_lamp_type = (
             item.raw_record.get(survey_mapping.lamp_type_col)
             if survey_mapping.lamp_type_col
             else item.lamp_type
         ) or item.lamp_type or "LED"
 
-        mapped_values: dict[str, Any] = {
-            lamp_mapping.pole_number_col: generated_pole,
-        }
+        for arm_num in unmatched_arms:
+            generated_id = f"{item.original_pole_number}-L{arm_num}"
 
-        # Lamp ID / LED ID column receives generated_pole with -L1/-L2
-        if target_lamp_id_col:
-            mapped_values[target_lamp_id_col] = generated_pole
-
-        # Arm Count / Old Arm Status receives survey arm count
-        if target_arm_col:
-            raw_arm_val = (
-                item.raw_record.get(survey_mapping.arm_count_col)
-                if survey_mapping.arm_count_col
-                else item.arm_count
-            )
-            mapped_values[target_arm_col] = raw_arm_val or item.arm_count
-
-        # Light's / Empty Pole receives survey lamp type (LED)
-        if target_lights_empty_col:
-            mapped_values[target_lights_empty_col] = effective_lamp_type
-
-        # If lamp_mapping.lamp_type_col was explicitly mapped and is not Lamp ID, populate it
-        if (
-            lamp_mapping.lamp_type_col
-            and lamp_mapping.lamp_type_col in lamp_headers
-            and lamp_mapping.lamp_type_col != target_lamp_id_col
-            and "id" not in normalize_header_name(lamp_mapping.lamp_type_col)
-        ):
-            mapped_values[lamp_mapping.lamp_type_col] = effective_lamp_type
-
-        for survey_col, lamp_col in survey_mapping.extra_mappings.items():
-            if survey_col in survey_headers and lamp_col in lamp_headers and lamp_col not in mapped_values:
-                mapped_values[lamp_col] = item.raw_record.get(survey_col)
-
-        newly_added_records.append(
-            {
-                "survey_excel_row": item.excel_row,
-                "original_pole_number": item.original_pole_number,
-                "generated_pole_number": generated_pole,
-                "l_sequence": item.l_sequence,
-                "arm_count": item.arm_count,
-                "lamp_type": item.lamp_type,
-                "mapped_values": {k: cell_to_display_str(v) for k, v in mapped_values.items()},
-                "_raw_mapped_values": mapped_values,
+            # 1. Pole Number column: MUST contain ONLY the original Pole Number. Never append L1/L2/L3.
+            mapped_values: dict[str, Any] = {
+                lamp_mapping.pole_number_col: item.original_pole_number,
             }
-        )
+
+            # 2. Lamp ID column: MUST contain the generated POLE_NUMBER-L{k} identifier
+            if target_lamp_id_col:
+                mapped_values[target_lamp_id_col] = generated_id
+            else:
+                mapped_values["Lamp ID"] = generated_id
+
+            # 3. Arm Count / Old Arm Status receives survey arm count
+            if target_arm_col:
+                raw_arm_val = (
+                    item.raw_record.get(survey_mapping.arm_count_col)
+                    if survey_mapping.arm_count_col
+                    else item.arm_count
+                )
+                mapped_values[target_arm_col] = raw_arm_val or item.arm_count
+
+            # 4. Light's / Empty Pole receives survey lamp type (LED)
+            if target_lights_empty_col:
+                mapped_values[target_lights_empty_col] = effective_lamp_type
+
+            # If lamp_mapping.lamp_type_col was explicitly mapped and is not Lamp ID or Pole Number, populate it
+            if (
+                lamp_mapping.lamp_type_col
+                and lamp_mapping.lamp_type_col in lamp_headers
+                and lamp_mapping.lamp_type_col != target_lamp_id_col
+                and lamp_mapping.lamp_type_col != lamp_mapping.pole_number_col
+                and "id" not in normalize_header_name(lamp_mapping.lamp_type_col)
+            ):
+                mapped_values[lamp_mapping.lamp_type_col] = effective_lamp_type
+
+            for survey_col, lamp_col in survey_mapping.extra_mappings.items():
+                if survey_col in survey_headers and lamp_col in lamp_headers and lamp_col not in mapped_values:
+                    mapped_values[lamp_col] = item.raw_record.get(survey_col)
+
+            newly_added_records.append(
+                {
+                    "survey_excel_row": item.excel_row,
+                    "original_pole_number": item.original_pole_number,
+                    "pole_number": item.original_pole_number,
+                    "generated_pole_number": item.original_pole_number,
+                    "generated_lamp_id": generated_id,
+                    "generated_identifier": generated_id,
+                    "l_sequence": arm_num,
+                    "arm_count": item.arm_count,
+                    "lamp_type": item.lamp_type,
+                    "mapped_values": {k: cell_to_display_str(v) for k, v in mapped_values.items()},
+                    "_raw_mapped_values": mapped_values,
+                }
+            )
 
     if unknown_lamp_types:
         warnings.append(

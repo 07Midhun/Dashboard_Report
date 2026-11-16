@@ -1256,13 +1256,15 @@ export function MergedReportPage() {
                                     r.mapped_values?.["Lamp ID"] ||
                                     r.mapped_values?.["LED ID"] ||
                                     r.mapped_values?.["Lamp Id"] ||
-                                    r.generated_pole_number;
+                                    r.generated_lamp_id ||
+                                    r.generated_identifier ||
+                                    (r.l_sequence ? `${r.original_pole_number}-L${r.l_sequence}` : r.original_pole_number);
                                   return (
                                     <tr key={idx} className="hover:bg-teal-50/40">
                                       <td className="px-3 py-2 font-mono text-slate-500">{r.survey_excel_row}</td>
                                       <td className="px-3 py-2 text-slate-700">{r.original_pole_number}</td>
                                       <td className="px-3 py-2 font-bold font-mono text-[#075D6B]">
-                                        {r.generated_pole_number}
+                                        {r.original_pole_number}
                                       </td>
                                       <td className="px-3 py-2 font-bold font-mono text-[#0D7780]">
                                         {lampIdVal}

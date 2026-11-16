@@ -253,4 +253,40 @@ def remap_storage_hierarchy(
     return {"status": "ok", "wards_mapped": copied_wards}
 
 
+@router.get("/storage-diagnostics")
+def get_storage_diagnostics(
+    db: Session = Depends(get_db),
+    _: AuthContext = Depends(require_admin),
+):
+    storage_root = storage_service.root
+    active_files = db.query(ReportFile).filter(ReportFile.status == "active").all()
+    results = []
+    for rf in active_files[:25]:
+        abs_p = storage_root / rf.storage_path
+        results.append({
+            "id": rf.id,
+            "report_type": rf.report_type,
+            "ward_id": rf.ward_id,
+            "filename": rf.original_filename,
+            "storage_path": rf.storage_path,
+            "exists": abs_p.exists(),
+        })
+
+    # Sample top level directories and files
+    top_entries = []
+    if storage_root.exists():
+        for item in sorted(storage_root.rglob("*"))[:40]:
+            if item.is_file():
+                top_entries.append(str(item.relative_to(storage_root)).replace("\\", "/"))
+
+    return {
+        "storage_root": str(storage_root),
+        "exists": storage_root.exists(),
+        "total_active_rf": len(active_files),
+        "sample_files": results,
+        "sample_disk_entries": top_entries,
+    }
+
+
+
 

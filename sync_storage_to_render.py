@@ -1,6 +1,7 @@
 """
 1-Click Storage Sync Script: Local Storage -> Render Cloud Persistent Storage
-Synchronizes all Pole Surveys, Lamp Installations, Merged Reports, and Previews to Render.
+Synchronizes all Pole Surveys, Lamp Installations, Merged Reports, and Previews to Render,
+automatically mapping local hierarchy IDs to Render cloud hierarchy IDs.
 """
 
 import io
@@ -15,6 +16,34 @@ DEFAULT_RENDER_URL = "https://schnell-backend.onrender.com"
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage")
 
 BATCH_MAX_BYTES = 18 * 1024 * 1024  # 18 MB uncompressed chunks for safe HTTP transmission
+
+ZONE_MAPPING = {
+    # (local_cust, local_reg, local_zone): (render_cust, render_reg, render_zone)
+    (1, 1, 1): (3, 1, 34),   # Bommanahalli (BMH)
+    (1, 2, 2): (3, 25, 35),  # CV Raman Nagar (CVRN)
+    (1, 2, 3): (3, 25, 36),  # Hebbal (HEB)
+    (1, 2, 4): (3, 25, 37),  # Pulakeshi Nagar (PN)
+    (1, 2, 5): (3, 25, 38),  # Sarvagna Nagar (SN)
+    (1, 2, 6): (3, 25, 39),  # Shanthi Nagar (SNTR)
+    (1, 2, 7): (3, 25, 40),  # Sivaji Nagar (SVJR)
+}
+
+
+def map_rel_path_to_render(rel_path: str) -> str | None:
+    parts = rel_path.replace("\\", "/").split("/")
+    if len(parts) >= 6 and parts[0] == "customers" and parts[2] == "regions" and parts[4] == "zones":
+        try:
+            key = (int(parts[1]), int(parts[3]), int(parts[5]))
+            if key in ZONE_MAPPING:
+                dst_c, dst_r, dst_z = ZONE_MAPPING[key]
+                new_parts = list(parts)
+                new_parts[1] = str(dst_c)
+                new_parts[3] = str(dst_r)
+                new_parts[5] = str(dst_z)
+                return "/".join(new_parts)
+        except Exception:
+            pass
+    return None
 
 
 def get_session():
@@ -63,9 +92,17 @@ def collect_storage_files(storage_root: str):
         for fname in files:
             if fname.endswith(".xlsx") or fname.endswith(".json"):
                 full_path = os.path.join(root, fname)
-                rel_path = os.path.relpath(full_path, storage_root).replace("\\", "/")
+                orig_rel = os.path.relpath(full_path, storage_root).replace("\\", "/")
                 file_size = os.path.getsize(full_path)
-                file_list.append((full_path, rel_path, file_size))
+
+                # Add under original path
+                file_list.append((full_path, orig_rel, file_size))
+
+                # Add under mapped Render path (customer 3 / zones 34-40)
+                mapped_rel = map_rel_path_to_render(orig_rel)
+                if mapped_rel and mapped_rel != orig_rel:
+                    file_list.append((full_path, mapped_rel, file_size))
+
     return file_list
 
 
@@ -146,7 +183,7 @@ def main():
         return
 
     total_mb = sum(f[2] for f in files) / 1024 / 1024
-    print(f"Found {len(files)} files to sync ({total_mb:.2f} MB total uncompressed).", flush=True)
+    print(f"Found {len(files)} files to sync (including mapped Render paths, {total_mb:.2f} MB uncompressed).", flush=True)
 
     batches = create_zip_batches(files)
     print(f"Split into {len(batches)} efficient upload batches.", flush=True)
@@ -160,21 +197,8 @@ def main():
 
     print("================================================================", flush=True)
     if success_count == len(batches):
-        print(" ALL FILES SYNCED TO RENDER SUCCESSFULLY!", flush=True)
-        print("--> Remapping storage folder structure to match Render database IDs...", flush=True)
-        try:
-            r_remap = session.post(
-                f"{render_url.rstrip('/')}/api/storage-remap-hierarchy",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=60,
-            )
-            if r_remap.status_code == 200:
-                print(f"     Remap successful: {r_remap.json().get('wards_mapped', 0)} ward folders mapped to Render zones.", flush=True)
-            else:
-                print(f"    Remap notice: {r_remap.text}", flush=True)
-        except Exception as e:
-            print(f"    Remap error: {e}", flush=True)
-        print("Every ward on your deployed dashboard is now populated and ready!", flush=True)
+        print(" ALL FILES SYNCED TO RENDER PERSISTENT STORAGE SUCCESSFULLY!", flush=True)
+        print("All wards (Customer 3, Zones 34-40) are now fully populated and ready!", flush=True)
     else:
         print(f" Sync finished ({success_count}/{len(batches)} batches succeeded).", flush=True)
     print("================================================================", flush=True)

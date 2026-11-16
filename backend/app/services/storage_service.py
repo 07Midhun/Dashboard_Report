@@ -21,6 +21,10 @@ class StorageService:
         self.root.mkdir(parents=True, exist_ok=True)
         self.temp_root.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def root_dir(self) -> Path:
+        return self.root
+
     def _resolve_relative(self, relative_path: str) -> Path:
         candidate = (self.root / relative_path).resolve()
         if self.root != candidate and self.root not in candidate.parents:

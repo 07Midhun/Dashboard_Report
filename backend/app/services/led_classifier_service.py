@@ -93,8 +93,10 @@ class LedClassifier:
     """
     Case-insensitive, whitespace-tolerant Lamp Type classifier.
     - Blank / None values and empty safeguards (e.g. standalone hyphen '-') classify as 'empty'.
-    - Checks explicit non-LED rules before LED rules so 'Non-LED' never misclassifies as LED.
-    - Checks LED rules before custom empty rules so hyphenated LED names (e.g. 'LED-60W') stay 'led'.
+    - Checks explicit non-LED rules (e.g. SVL, Tubelight) before LED rules so mixed non-LED
+      combinations (e.g. 'SVL, LED', 'Tube light, LED') remain strictly non-LED.
+    - Safeguards ensure generic non-LED token rules (e.g. 'FL') do not intercept LED combinations ('FL LED').
+    - Evaluates explicit LED rules (e.g. 'FL LED', 'LED,LED', 'LED').
     - Unmatched values return 'unknown' instead of guessing.
     """
 
@@ -120,14 +122,19 @@ class LedClassifier:
         if not cleaned:
             return "empty", "(blank)"
 
+        # 1. Non-LED rules with safeguard against shadowing LED types (e.g. 'FL' vs 'FL LED')
         for rule in self.non_led_rules:
+            if rule.pattern.strip().upper() in {"FL", "FTL"} and "LED" in cleaned.upper():
+                continue
             if _matches(cleaned, rule.pattern, rule.match_type):
                 return "non_led", rule.pattern
 
-        for rule in self.led_rules:
+        # 2. LED rules (longer compound patterns first e.g. 'FL LED,LED', 'FL LED', 'LED')
+        for rule in sorted(self.led_rules, key=lambda r: len(r.pattern), reverse=True):
             if _matches(cleaned, rule.pattern, rule.match_type):
                 return "led", rule.pattern
 
+        # 3. Empty rules
         for rule in self.empty_rules:
             if _matches(cleaned, rule.pattern, rule.match_type):
                 return "empty", rule.pattern

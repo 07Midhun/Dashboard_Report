@@ -238,9 +238,15 @@ def test_custom_led_classification_rule_support():
         [
             RuleSpec("SOLAR LED", "contains", "led"),
             RuleSpec("LED", "word", "led"),
+            RuleSpec("FL LED", "contains", "led"),
+            RuleSpec("FL LED,LED", "contains", "led"),
+            RuleSpec("FL", "contains", "non_led"),
         ]
     )
     assert classifier.classify("Solar LED 30W")[0] == "led"
+    assert classifier.classify("FL LED")[0] == "led"
+    assert classifier.classify("FL LED,LED")[0] == "led"
+    assert classifier.classify("FL")[0] == "non_led"
     assert classifier.classify("Sealed Beam")[0] == "unknown"
 
 

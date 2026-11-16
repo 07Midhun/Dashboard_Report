@@ -143,7 +143,6 @@ def seed_initial_data(db: Session) -> None:
                 password_hash=hash_password(settings.seed_admin_password),
                 role="admin",
                 status="active",
-                is_active=True,
             )
             db.add(admin)
         db.commit()
@@ -288,7 +287,6 @@ def seed_initial_data(db: Session) -> None:
                 password_hash=hash_password(settings.seed_customer_user_password),
                 role="customer",
                 status="active",
-                is_active=True,
             )
             db.add(customer_user)
         db.flush()

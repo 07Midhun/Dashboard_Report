@@ -181,12 +181,7 @@ async def sync_storage_file(
     _: AuthContext = Depends(require_admin),
 ):
     clean_rel = relative_path.replace("\\", "/").lstrip("/")
-    if ".." in clean_rel:
-        raise HTTPException(status_code=400, detail="Invalid path traversal sequence.")
-    target_path = (storage_service.root_dir / clean_rel).resolve()
-    if not str(target_path).startswith(str(storage_service.root_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Target path is outside storage root.")
-
+    target_path = storage_service._resolve_relative(clean_rel)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     content = await file.read()
     target_path.write_bytes(content)
@@ -205,10 +200,9 @@ async def sync_storage_zip(
             if member.is_dir():
                 continue
             clean_name = member.filename.replace("\\", "/").lstrip("/")
-            if ".." in clean_name:
-                continue
-            dest_path = (storage_service.root_dir / clean_name).resolve()
-            if not str(dest_path).startswith(str(storage_service.root_dir.resolve())):
+            try:
+                dest_path = storage_service._resolve_relative(clean_name)
+            except Exception:
                 continue
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(member) as src, open(dest_path, "wb") as dst:

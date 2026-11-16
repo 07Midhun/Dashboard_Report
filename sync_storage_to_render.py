@@ -21,7 +21,7 @@ def login_admin(base_url: str, username: str, password: str) -> str:
     try:
         resp = requests.post(
             login_url,
-            data={"username": username, "password": password},
+            json={"identifier": username, "password": password},
             timeout=25,
         )
     except requests.exceptions.RequestException as e:
@@ -84,7 +84,7 @@ def sync_batch_zip(base_url: str, token: str, batch, batch_idx: int, total_batch
 
     zip_bytes = zip_buffer.getvalue()
     zip_size_mb = len(zip_bytes) / 1024 / 1024
-    sync_url = f"{base_url.rstrip('/')}/api/admin/storage-sync-zip"
+    sync_url = f"{base_url.rstrip('/')}/api/storage-sync-zip"
 
     print(
         f"--> [Batch {batch_idx}/{total_batches}] Uploading {len(batch)} files ({zip_size_mb:.2f} MB compressed)..."
@@ -108,7 +108,7 @@ def sync_batch_zip(base_url: str, token: str, batch, batch_idx: int, total_batch
 
 
 def sync_batch_individual(base_url: str, token: str, batch):
-    sync_file_url = f"{base_url.rstrip('/')}/api/admin/storage-sync-file"
+    sync_file_url = f"{base_url.rstrip('/')}/api/storage-sync-file"
     all_ok = True
     for full_path, rel_path, _ in batch:
         with open(full_path, "rb") as f:

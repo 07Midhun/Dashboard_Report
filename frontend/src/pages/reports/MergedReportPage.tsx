@@ -220,7 +220,15 @@ export function MergedReportPage() {
       } catch (err) {
         setPreviewData(null);
         setPreviewedVersion(null);
-        showToast("error", "Preview Load Failed", extractErrorMessage(err));
+        const msg = extractErrorMessage(err);
+        // Suppress initial auto-preview toast if the old snapshot file simply doesn't exist on server disk yet
+        const isStorageMissing =
+          msg.toLowerCase().includes("persistent storage") ||
+          msg.toLowerCase().includes("snapshot") ||
+          msg.toLowerCase().includes("not present");
+        if (!isStorageMissing) {
+          showToast("error", "Preview Load Failed", msg);
+        }
       } finally {
         setLoadingPreview(false);
       }

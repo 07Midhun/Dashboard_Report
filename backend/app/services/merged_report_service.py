@@ -410,8 +410,20 @@ def generate_merged_report(
             detail=f"Cannot generate Merged Report: missing {' and '.join(missing)} for this ward.",
         )
 
-    pole_abs = storage_service.get_absolute_path(pole_file.storage_path)
-    lamp_abs = storage_service.get_absolute_path(lamp_file.storage_path)
+    try:
+        pole_abs = storage_service.get_absolute_path(pole_file.storage_path)
+    except (HTTPException, FileNotFoundError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Active Pole Survey workbook file is not found on server storage. Please upload the Pole Survey workbook for this ward.",
+        )
+    try:
+        lamp_abs = storage_service.get_absolute_path(lamp_file.storage_path)
+    except (HTTPException, FileNotFoundError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Active Lamp Installation workbook file is not found on server storage. Please upload the Lamp Installation workbook for this ward.",
+        )
 
     p_insp, p_rows = inspect_workbook(
         pole_abs,

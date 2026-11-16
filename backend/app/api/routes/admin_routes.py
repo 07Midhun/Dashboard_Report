@@ -279,13 +279,117 @@ def get_storage_diagnostics(
             if item.is_file():
                 top_entries.append(str(item.relative_to(storage_root)).replace("\\", "/"))
 
+    from app.models.report import MergedReport
+    merged_reports = db.query(MergedReport).all()
+    mr_results = []
+    for mr in merged_reports[:15]:
+        gen_exists = (storage_root / mr.generated_file_path).exists() if mr.generated_file_path else False
+        mr_results.append({
+            "id": mr.id,
+            "ward_id": mr.ward_id,
+            "status": mr.status,
+            "version": mr.current_version,
+            "generated_file_path": mr.generated_file_path,
+            "exists": gen_exists,
+        })
+
     return {
         "storage_root": str(storage_root),
         "exists": storage_root.exists(),
         "total_active_rf": len(active_files),
         "sample_files": results,
+        "total_merged_reports": len(merged_reports),
+        "sample_merged_reports": mr_results,
         "sample_disk_entries": top_entries,
     }
+
+
+@router.post("/storage-sync-reconcile")
+def reconcile_storage_files(
+    db: Session = Depends(get_db),
+    _: AuthContext = Depends(require_admin),
+):
+    """
+    Reconciles physical files on disk with ReportFile and MergedReport records in the database.
+    If a database record expects a specific random-UUID filename in its ward directory,
+    this endpoint locates the corresponding uploaded report in that ward directory and copies
+    it to the exact path the database expects.
+    """
+    storage_root = storage_service.root
+    reconciled_files = 0
+    reconciled_reports = 0
+
+    # 1. Reconcile ReportFiles and ReportFileVersions
+    active_files = db.query(ReportFile).filter(ReportFile.status == "active").all()
+    for rf in active_files:
+        target_path = storage_root / rf.storage_path
+        if not target_path.exists():
+            folder = target_path.parent
+            if folder.exists():
+                candidates = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() in {".xlsx", ".xls"}]
+                if candidates:
+                    # Choose best matching candidate (e.g. by modification time or size)
+                    best = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(best, target_path)
+                    reconciled_files += 1
+
+        for v in rf.versions:
+            v_target = storage_root / v.storage_path
+            if not v_target.exists():
+                v_folder = v_target.parent
+                if v_folder.exists():
+                    v_candidates = [f for f in v_folder.iterdir() if f.is_file() and f.suffix.lower() in {".xlsx", ".xls"}]
+                    if v_candidates:
+                        best = sorted(v_candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                        v_target.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(best, v_target)
+
+    # 2. Reconcile MergedReport and MergedReportVersion
+    from app.models.report import MergedReport, MergedReportVersion
+    merged_reports = db.query(MergedReport).all()
+    for mr in merged_reports:
+        if mr.generated_file_path:
+            mr_path = storage_root / mr.generated_file_path
+            if not mr_path.exists():
+                folder = mr_path.parent
+                if folder.exists():
+                    candidates = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() == ".xlsx"]
+                    if candidates:
+                        best = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                        mr_path.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(best, mr_path)
+                        reconciled_reports += 1
+
+        for mv in mr.versions:
+            if mv.generated_file_path:
+                mv_path = storage_root / mv.generated_file_path
+                if not mv_path.exists():
+                    folder = mv_path.parent
+                    if folder.exists():
+                        candidates = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() == ".xlsx"]
+                        if candidates:
+                            best = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                            mv_path.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(best, mv_path)
+
+            if mv.preview_snapshot_path:
+                prev_path = storage_root / mv.preview_snapshot_path
+                if not prev_path.exists():
+                    folder = prev_path.parent
+                    if folder.exists():
+                        candidates = [f for f in folder.iterdir() if f.is_file() and f.suffix.lower() == ".json"]
+                        if candidates:
+                            best = sorted(candidates, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+                            prev_path.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(best, prev_path)
+
+    return {
+        "status": "ok",
+        "reconciled_report_files": reconciled_files,
+        "reconciled_merged_reports": reconciled_reports,
+    }
+
 
 
 

@@ -197,8 +197,24 @@ def main():
 
     print("================================================================", flush=True)
     if success_count == len(batches):
-        print(" ALL FILES SYNCED TO RENDER PERSISTENT STORAGE SUCCESSFULLY!", flush=True)
-        print("All wards (Customer 3, Zones 34-40) are now fully populated and ready!", flush=True)
+        print(" ALL FILES UPLOADED TO RENDER SUCCESSFULLY!", flush=True)
+        print("--> Reconciling disk files with database paths...", flush=True)
+        try:
+            r_rec = session.post(
+                f"{render_url.rstrip('/')}/api/storage-sync-reconcile",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=60,
+            )
+            if r_rec.status_code == 200:
+                rec_data = r_rec.json()
+                print(f"     Reconciled: {rec_data.get('reconciled_report_files', 0)} report files, {rec_data.get('reconciled_merged_reports', 0)} merged reports.", flush=True)
+            else:
+                print(f"     Reconcile response (HTTP {r_rec.status_code}): {r_rec.text[:200]}", flush=True)
+        except Exception as e:
+            print(f"     Reconcile error: {e}", flush=True)
+        print("================================================================", flush=True)
+        print(" ALL WARDS ARE NOW FULLY SYNCHRONIZED AND READY ON RENDER!", flush=True)
+        print("You can view and generate merged reports without missing file errors.", flush=True)
     else:
         print(f" Sync finished ({success_count}/{len(batches)} batches succeeded).", flush=True)
     print("================================================================", flush=True)

@@ -218,6 +218,8 @@ export function MergedReportPage() {
           }, 80);
         }
       } catch (err) {
+        setPreviewData(null);
+        setPreviewedVersion(null);
         showToast("error", "Preview Load Failed", extractErrorMessage(err));
       } finally {
         setLoadingPreview(false);

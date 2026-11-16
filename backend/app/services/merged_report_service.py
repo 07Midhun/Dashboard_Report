@@ -178,53 +178,75 @@ def inspect_ward_sources(
         blocking_error=blocking_error,
     )
 
+    missing_on_disk: list[str] = []
+
     if pole_file is not None:
-        pole_abs = storage_service.get_absolute_path(pole_file.storage_path)
-        p_insp, _ = inspect_workbook(
-            pole_abs,
-            sheet_name=pole_sheet or pole_file.sheet_name,
-            header_row_index=pole_header_row or pole_file.header_row_index,
-        )
-        saved_p = _find_saved_mapping(
-            db,
-            customer_id=customer_id,
-            report_type="pole_survey",
-            signature_hash=p_insp.header_signature_hash,
-        )
-        out.pole_survey_sheets = p_insp.sheet_names
-        out.pole_survey_active_sheet = p_insp.active_sheet
-        out.pole_survey_header_row = p_insp.header_row_index
-        out.pole_survey_headers = p_insp.headers
-        out.pole_survey_suggested_mapping = p_insp.suggested_mapping
-        out.pole_survey_saved_mapping = saved_p.mapping_config if saved_p else None
-        out.pole_survey_needs_confirmation = (
-            p_insp.needs_mapping_confirmation and saved_p is None
-        )
-        warnings.extend([f"[Pole Survey] {w}" for w in p_insp.warnings])
+        try:
+            pole_abs = storage_service.get_absolute_path(pole_file.storage_path)
+            p_insp, _ = inspect_workbook(
+                pole_abs,
+                sheet_name=pole_sheet or pole_file.sheet_name,
+                header_row_index=pole_header_row or pole_file.header_row_index,
+            )
+            saved_p = _find_saved_mapping(
+                db,
+                customer_id=customer_id,
+                report_type="pole_survey",
+                signature_hash=p_insp.header_signature_hash,
+            )
+            out.pole_survey_sheets = p_insp.sheet_names
+            out.pole_survey_active_sheet = p_insp.active_sheet
+            out.pole_survey_header_row = p_insp.header_row_index
+            out.pole_survey_headers = p_insp.headers
+            out.pole_survey_suggested_mapping = p_insp.suggested_mapping
+            out.pole_survey_saved_mapping = saved_p.mapping_config if saved_p else None
+            out.pole_survey_needs_confirmation = (
+                p_insp.needs_mapping_confirmation and saved_p is None
+            )
+            warnings.extend([f"[Pole Survey] {w}" for w in p_insp.warnings])
+        except (HTTPException, FileNotFoundError):
+            out.pole_survey_ready = False
+            missing_on_disk.append("Pole Survey Report")
+            warnings.append(
+                "[Pole Survey] Source workbook file not found on server storage. Please upload the file for this ward."
+            )
 
     if lamp_file is not None:
-        lamp_abs = storage_service.get_absolute_path(lamp_file.storage_path)
-        l_insp, _ = inspect_workbook(
-            lamp_abs,
-            sheet_name=lamp_sheet or lamp_file.sheet_name,
-            header_row_index=lamp_header_row or lamp_file.header_row_index,
+        try:
+            lamp_abs = storage_service.get_absolute_path(lamp_file.storage_path)
+            l_insp, _ = inspect_workbook(
+                lamp_abs,
+                sheet_name=lamp_sheet or lamp_file.sheet_name,
+                header_row_index=lamp_header_row or lamp_file.header_row_index,
+            )
+            saved_l = _find_saved_mapping(
+                db,
+                customer_id=customer_id,
+                report_type="lamp_installation",
+                signature_hash=l_insp.header_signature_hash,
+            )
+            out.lamp_sheets = l_insp.sheet_names
+            out.lamp_active_sheet = l_insp.active_sheet
+            out.lamp_header_row = l_insp.header_row_index
+            out.lamp_headers = l_insp.headers
+            out.lamp_suggested_mapping = l_insp.suggested_mapping
+            out.lamp_saved_mapping = saved_l.mapping_config if saved_l else None
+            out.lamp_needs_confirmation = (
+                l_insp.needs_mapping_confirmation and saved_l is None
+            )
+            warnings.extend([f"[Lamp Installation] {w}" for w in l_insp.warnings])
+        except (HTTPException, FileNotFoundError):
+            out.lamp_installation_ready = False
+            missing_on_disk.append("Lamp Installation Report")
+            warnings.append(
+                "[Lamp Installation] Source workbook file not found on server storage. Please upload the file for this ward."
+            )
+
+    if missing_on_disk and not out.blocking_error:
+        out.blocking_error = (
+            f"Physical workbook file not found on server storage for {' and '.join(missing_on_disk)}. "
+            f"Please upload the workbook(s) for this ward."
         )
-        saved_l = _find_saved_mapping(
-            db,
-            customer_id=customer_id,
-            report_type="lamp_installation",
-            signature_hash=l_insp.header_signature_hash,
-        )
-        out.lamp_sheets = l_insp.sheet_names
-        out.lamp_active_sheet = l_insp.active_sheet
-        out.lamp_header_row = l_insp.header_row_index
-        out.lamp_headers = l_insp.headers
-        out.lamp_suggested_mapping = l_insp.suggested_mapping
-        out.lamp_saved_mapping = saved_l.mapping_config if saved_l else None
-        out.lamp_needs_confirmation = (
-            l_insp.needs_mapping_confirmation and saved_l is None
-        )
-        warnings.extend([f"[Lamp Installation] {w}" for w in l_insp.warnings])
 
     out.warnings = warnings
     return out
@@ -747,8 +769,14 @@ def preview_merged_report(
             detail="Preview snapshot not found for this Merged Report version.",
         )
 
-    snap_abs = storage_service.get_absolute_path(ver.preview_snapshot_path)
-    data = json.loads(snap_abs.read_text(encoding="utf-8"))
+    try:
+        snap_abs = storage_service.get_absolute_path(ver.preview_snapshot_path)
+        data = json.loads(snap_abs.read_text(encoding="utf-8"))
+    except (HTTPException, FileNotFoundError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored preview snapshot is not present on server storage. Please regenerate or re-upload reports for this ward.",
+        )
     raw_sum = data.get("summary", {})
     summary_out = ProcessingSummaryOut(
         total_lamp_installation_records=raw_sum.get("total_lamp_installation_records", 0),

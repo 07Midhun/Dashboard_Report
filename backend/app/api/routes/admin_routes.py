@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, Query, Request, status
+import io
+import shutil
+import zipfile
+from pathlib import Path
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -27,6 +31,7 @@ from app.services.admin_service import (
     update_led_rule,
     update_user,
 )
+from app.services.storage_service import storage_service
 
 
 router = APIRouter(tags=["Administration"])
@@ -167,4 +172,48 @@ def get_upload_history(
             }
         )
     return out
+
+
+@router.post("/storage-sync-file")
+async def sync_storage_file(
+    relative_path: str = Form(...),
+    file: UploadFile = File(...),
+    _: AuthContext = Depends(require_admin),
+):
+    clean_rel = relative_path.replace("\\", "/").lstrip("/")
+    if ".." in clean_rel:
+        raise HTTPException(status_code=400, detail="Invalid path traversal sequence.")
+    target_path = (storage_service.root_dir / clean_rel).resolve()
+    if not str(target_path).startswith(str(storage_service.root_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Target path is outside storage root.")
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    target_path.write_bytes(content)
+    return {"status": "ok", "path": clean_rel, "bytes_written": len(content)}
+
+
+@router.post("/storage-sync-zip")
+async def sync_storage_zip(
+    zip_file: UploadFile = File(...),
+    _: AuthContext = Depends(require_admin),
+):
+    content = await zip_file.read()
+    extracted_count = 0
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        for member in zf.infolist():
+            if member.is_dir():
+                continue
+            clean_name = member.filename.replace("\\", "/").lstrip("/")
+            if ".." in clean_name:
+                continue
+            dest_path = (storage_service.root_dir / clean_name).resolve()
+            if not str(dest_path).startswith(str(storage_service.root_dir.resolve())):
+                continue
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member) as src, open(dest_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            extracted_count += 1
+    return {"status": "ok", "files_extracted": extracted_count}
+
 

@@ -189,10 +189,10 @@ CREATE TABLE IF NOT EXISTS user_customer_permissions (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Ensure led_classification_rules table has unique constraint on pattern and match_type
+-- Ensure led_classification_rules table has all columns and constraints
 CREATE TABLE IF NOT EXISTS led_classification_rules (
     id SERIAL PRIMARY KEY,
-    pattern VARCHAR(120) NOT NULL,
+    pattern VARCHAR(150) NOT NULL,
     match_type VARCHAR(32) NOT NULL DEFAULT 'contains',
     classification VARCHAR(32) NOT NULL DEFAULT 'led',
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -201,45 +201,53 @@ CREATE TABLE IF NOT EXISTS led_classification_rules (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS pattern VARCHAR(150);
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS match_type VARCHAR(32) DEFAULT 'contains';
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS classification VARCHAR(32) DEFAULT 'led';
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS created_by INTEGER;
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+ALTER TABLE led_classification_rules ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
 -- Seed FL LED and non-LED combinations directly if not existing
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'FL LED', 'contains', 'led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'FL LED', 'contains', 'led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'LED,LED', 'contains', 'led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'LED,LED', 'contains', 'led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'led,led' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'FL LED,LED', 'contains', 'led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'FL LED,LED', 'contains', 'led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led,led' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'LED,FL LED', 'contains', 'led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'LED,FL LED', 'contains', 'led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'led,fl led' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'FL LED,FL LED', 'contains', 'led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'FL LED,FL LED', 'contains', 'led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'fl led,fl led' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'TUBELIGHT', 'contains', 'non_led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'TUBELIGHT', 'contains', 'non_led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tubelight' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'TUBE LIGHT', 'contains', 'non_led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'TUBE LIGHT', 'contains', 'non_led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tube light' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'SVL,TUBELIGHT', 'contains', 'non_led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'SVL,TUBELIGHT', 'contains', 'non_led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'svl,tubelight' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'SVL,SVL', 'contains', 'non_led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'SVL,SVL', 'contains', 'non_led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'svl,svl' AND match_type = 'contains');
 
-INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at, updated_at)
-SELECT 'TUBELIGHT,SVL', 'contains', 'non_led', true, NOW(), NOW()
+INSERT INTO led_classification_rules (pattern, match_type, classification, is_active, created_at)
+SELECT 'TUBELIGHT,SVL', 'contains', 'non_led', true, NOW()
 WHERE NOT EXISTS (SELECT 1 FROM led_classification_rules WHERE LOWER(pattern) = 'tubelight,svl' AND match_type = 'contains');
 
 """
@@ -249,13 +257,14 @@ def auto_heal_schema(engine: Engine) -> None:
     """Executes safe idempotent schema patches before metadata.create_all."""
     if engine.dialect.name != "postgresql":
         return
-    try:
-        with engine.begin() as conn:
-            for statement in SCHEMA_PATCH_SQL.strip().split(";"):
-                stmt = statement.strip()
-                if stmt:
-                    conn.execute(text(stmt))
-        logger.info("Database schema auto-heal completed successfully.")
-    except Exception as exc:
-        logger.warning("Database schema auto-heal notice: %s", exc)
+    for statement in SCHEMA_PATCH_SQL.strip().split(";"):
+        stmt = statement.strip()
+        if not stmt:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception as exc:
+            logger.debug("Database schema statement notice (%s...): %s", stmt[:40], exc)
+    logger.info("Database schema auto-heal completed successfully.")
 
